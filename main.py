@@ -1,35 +1,67 @@
-import string
+import requests
 
-#Check if the user input contains non-alphabetic characters
-def AlphabetCheck(city_name:str)->bool:
-    for letter in city_name:
-        if letter not in string.ascii_letters:
-            print("Invalid input.")
-            return False
-        else:
-            print("Valid input.")
-            return True
+API_KEY = "a2e1a6d91f113b9e8f9baca3ad3f2dfa"
+weathers = {
+    "Clear": "sunny",
+    "Clouds": "cloudy",
+    "Drizzle": "drizzly",
+    "Rain": "rainy",
+    "Thunderstorm": "stormy",
+    "Snow": "snowy",
+    "Mist": "misty",
+    "Smoke": "smokey",
+    "Haze": "hazy",
+    "Dust": "dusty",
+    "Fog": "foggy",
+    "Sand": "sandy",
+    "Ash": "ashy",
+    "Squall": "squally",
+    "Tornado": "being hit with a tornado",
+}
 
-#Get user's input
-def get_city_name()->str:
-    city_name = input("Input which city's weather you want to check: ")
-    valid = AlphabetCheck(city_name)
-    
-    #TODO add city names into list
-    city_list = []
-    if valid and city_name in city_list:
-        return city_name
+
+def get_city_name() -> str:
+    """Ask user for a city name"""
+    return input("Input city name: ")
+
+
+def get_weather(city_name: str) -> None:
+    """Get the weather info for a city"""
+    response = requests.get(
+        "https://api.openweathermap.org/data/2.5/weather?q="
+        + city_name
+        + "&appid="
+        + API_KEY
+    )
+    try:
+        weather_status = response.json()["weather"][0]["main"]
+        print(f"{city_name.title()} is {weathers[weather_status]} today.")
+    except KeyError:
+        print("Invalid input.")
+
+
+def check_another_city() -> bool:
+    """Ask the user if they want to check another city's weather"""
+    print()
+    response = input("Would you want to check another city's weather? (y/n) ")
+    if response.lower() == "n":
+        print("Goodbye!")
+        return False
+    elif response.lower() == "y":
+        return True
     else:
-        return get_city_name()
+        print("Invalid input.")
+        return check_another_city()
 
-#Get weather info 
-def get_weather(city_name:str)->None:
-    #TODO Working with APIs
-    weather = None
-    print(f"{city_name} is {weather} today.")
 
 def main():
-    print("Hello from pdi-weather-dashboard!")
+    print("Hello! Which city's weather do you want to check today?")
+    check_weather = True
+    while check_weather:
+        get_weather(get_city_name())
+        check_weather = check_another_city()
+        print()
+
 
 if __name__ == "__main__":
     main()
