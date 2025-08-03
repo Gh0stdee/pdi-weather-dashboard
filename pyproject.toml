@@ -9,3 +9,13 @@ dependencies = [
     "requests>=2.32.4",
     "rich>=14.1.0",
 ]
+
+[dependency-groups]
+dev = [
+    "ty>=0.0.1a16",
+]
+
+[tool.uv.workspace]
+members = [
+    "weather",
+]
