@@ -6,12 +6,14 @@ import requests
 from decouple import config
 from rich.console import Console
 
-BASE_URL = "https://api.openweathermap.org/data/2.5/"
-WEATHER_SERVICE = "{BASE_URL}weather?q={city_name}&appid={API_KEY}"
-FORECAST_SERVICE = "{BASE_URL}forecast?lat={lat}&lon={lon}&appid={API_KEY}"
 API_KEY = config("API_KEY")
+BASE_URL = "https://api.openweathermap.org/data/2.5/"
+WEATHER_SERVICE = (
+    f"{BASE_URL}weather?appid={API_KEY}" + "&q={city_name}&appid={API_KEY}"
+)
+FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 
-WEATHER_DESCRIPTION = "d"
+WEATHER_DETAILS = "d"
 WEATHER_FORECAST = "f"
 WEATHER_COMPARISON = "c"
 
@@ -19,7 +21,7 @@ console = Console()
 CURRENT_DAY = datetime.now()
 six_days_list = []
 FUNCTIONS = [
-    "Weather Description [bold blue](d)[/]",
+    "Weather Details [bold blue](d)[/]",
     "Weather Forecast [bold blue](f)[/]",
     "Weather Comparison [bold blue](c)[/]",
     "Check Another City [bold red](q)[/]",
@@ -43,7 +45,7 @@ WEATHERS = {
     "Tornado": "being hit with a tornado",
 }
 
-ORDINARY_WIND_ANGLES = [0, 45, 90, 135, 180, 225, 270, 315]
+ORDINARY_WIND_ANGLES: list[int] = [0, 45, 90, 135, 180, 225, 270, 315]
 
 ORDINARY_WIND_DIRECTIONS = {
     "N": ORDINARY_WIND_ANGLES[0],
@@ -56,7 +58,7 @@ ORDINARY_WIND_DIRECTIONS = {
     "NW": ORDINARY_WIND_ANGLES[7],
 }
 
-SPECIFIC_WIND_DIRECTIONS = {
+SPECIFIC_WIND_DIRECTIONS: dict = {
     "NNE": (0, 45),
     "ENE": (45, 90),
     "ESE": (90, 135),
@@ -66,12 +68,26 @@ SPECIFIC_WIND_DIRECTIONS = {
     "WNW": (270, 315),
     "NNW": (315, 360),
 }
-COMPARISON_LIST = ["Weather", "Temperature"]
+COMPARISON_LIST: list[str] = ["Weather", "Temperature"]
 WEATHER = "1"
 TEMPERATURE = "2"
 
 city_list = []
 checked_cities = []
+
+first_day_temperature = []
+first_day_forecast_weather_count = Counter()
+second_day_temperature = []
+second_day_forecast_weather_count = Counter()
+third_day_temperature = []
+third_day_forecast_weather_count = Counter()
+fourth_day_temperature = []
+fourth_day_forecast_weather_count = Counter()
+fifth_day_temperature = []
+fifth_day_forecast_weather_count = Counter()
+sixth_day_temperature = []
+sixth_day_forecast_weather_count = Counter()
+temperature_and_weather_forecast = []
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -169,31 +185,7 @@ def get_six_days_for_forecast():
         six_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
 
 
-first_day_temperature = []
-first_day_forecast_weather_count = Counter()
-second_day_temperature = []
-second_day_forecast_weather_count = Counter()
-third_day_temperature = []
-third_day_forecast_weather_count = Counter()
-fourth_day_temperature = []
-fourth_day_forecast_weather_count = Counter()
-fifth_day_temperature = []
-fifth_day_forecast_weather_count = Counter()
-sixth_day_temperature = []
-sixth_day_forecast_weather_count = Counter()
-temperature_and_weather_forecast = []
-
-
-def check_weather_forecast(response):
-    forecast_response = requests.get(
-        FORECAST_SERVICE.format(
-            BASE_URL=BASE_URL,
-            lat=response["coord"]["lat"],
-            lon=response["coord"]["lon"],
-            API_KEY=API_KEY,
-        )
-    ).json()
-    get_six_days_for_forecast()
+def parse_forecast_response(forecast_response):
     for forecast_info in forecast_response["list"]:
         if forecast_info["dt_txt"][:10] == six_days_list[0]:
             first_day_forecast_weather_count.update(
@@ -243,6 +235,19 @@ def check_weather_forecast(response):
     temperature_and_weather_forecast.append(
         (sixth_day_temperature, sixth_day_forecast_weather_count)
     )
+
+
+def check_weather_forecast(response):
+    forecast_response = requests.get(
+        FORECAST_SERVICE.format(
+            BASE_URL=BASE_URL,
+            lat=response["coord"]["lat"],
+            lon=response["coord"]["lon"],
+            API_KEY=API_KEY,
+        )
+    ).json()
+    get_six_days_for_forecast()
+    parse_forecast_response(forecast_response)
 
     unit_preference = get_unit_preference()
     console.print()
@@ -298,9 +303,17 @@ def weather_comparison(city_name: str, response):
                     console.print(f"{index}. {info_to_compare}")
                 info = console.input().strip()
                 if info == WEATHER:
-                    console.print(
-                        f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
-                    )
+                    if (
+                        WEATHERS[first_city_info["weather_status"]]
+                        == WEATHERS[second_city_info["weather_status"]]
+                    ):
+                        console.print(
+                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info["weather_status"]]}"
+                        )
+                    else:
+                        console.print(
+                            f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
+                        )
                     break
                 elif info == TEMPERATURE:
                     console.print()
@@ -312,19 +325,25 @@ def weather_comparison(city_name: str, response):
                     if unit_preference in ("2", "f"):
                         difference *= 9 / 5
                         unit = "°F"
+                        first_city_temp = from_celsius_convert_to_fahrenheit(
+                            first_city_temp
+                        )
+                        second_city_temp = from_celsius_convert_to_fahrenheit(
+                            second_city_temp
+                        )
                     else:
                         unit = "°C"
                     if difference < 0:
                         console.print(
-                            f"{first_city_name} is {abs(difference):.2f} {unit} colder than {second_city_name}."
+                            f"{first_city_name}({first_city_temp:.2f}{unit}) is {abs(difference):.2f} {unit} colder than {second_city_name}({second_city_temp:.2f}{unit})."
                         )
                     elif difference > 0:
                         console.print(
-                            f"{first_city_name} is {difference:.2f} {unit} colder than {second_city_name}."
+                            f"{first_city_name}({first_city_temp:.2f}{unit}) is {difference:.2f} {unit} colder than {second_city_name}({second_city_temp:.2f}{unit})."
                         )
                     else:
                         console.print(
-                            f"{first_city_name} has the same temperaure as {second_city_name}."
+                            f"{first_city_name} has the same temperaure as {second_city_name} ({second_city_temp:.2f}{unit})."
                         )
                     break
                 else:
@@ -346,7 +365,7 @@ def function_select(city_name: str, response) -> None:
         function_choice = input().strip().lower()
         console.print()
         console.rule()
-        if function_choice in ("1", WEATHER_DESCRIPTION):
+        if function_choice in ("1", WEATHER_DETAILS):
             check_city_weather(city_name, response)
         elif function_choice in ("2", WEATHER_FORECAST):
             check_weather_forecast(response)
@@ -385,6 +404,4 @@ def main():
 
 
 if __name__ == "__main__":
-    get_six_days_for_forecast()
-    print(six_days_list)
     main()
