@@ -1,6 +1,6 @@
 from collections import Counter
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 
 import requests
 from decouple import config
@@ -14,17 +14,20 @@ WEATHER_SERVICE = (
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 
 
-class Dashboard_Functions(Enum):
+class Dashboard_Functions(StrEnum):
     WEATHER_DETAILS = "d"
     WEATHER_FORECAST = "f"
     WEATHER_COMPARISON = "c"
+
+
+class WindDirectionNotFoundError(ValueError):
+    """Custom exception for invalid wind direction angles."""
 
 
 console = Console()
 CURRENT_DAY = datetime.now()
 
 """list for storing days of the six day forecast"""
-six_days_list = []
 FUNCTIONS = [
     "Weather Details [bold blue](d)[/]",
     "Weather Forecast [bold blue](f)[/]",
@@ -76,30 +79,9 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 COMPARISON_LIST: list[str] = ["Weather", "Temperature"]
 
 
-class Comparison_Features(Enum):
+class Comparison_Features(StrEnum):
     WEATHER = "1"
     TEMPERATURE = "2"
-
-
-"""list of all cities"""
-city_list = []
-
-"""set of all cities checked by user"""
-checked_cities = set()
-
-first_day_temperature = []
-first_day_forecast_weather_count = Counter()
-second_day_temperature = []
-second_day_forecast_weather_count = Counter()
-third_day_temperature = []
-third_day_forecast_weather_count = Counter()
-fourth_day_temperature = []
-fourth_day_forecast_weather_count = Counter()
-fifth_day_temperature = []
-fifth_day_forecast_weather_count = Counter()
-sixth_day_temperature = []
-sixth_day_forecast_weather_count = Counter()
-temperature_and_weather_forecast = []
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -127,11 +109,10 @@ def api_call(city_name: str):
         return None
 
     console.print()
-    checked_cities.add(city_name.title())
     return response
 
 
-def get_wind_direction(angle: int) -> None:
+def get_wind_direction(angle: int) -> str:
     if angle in ORDINARY_WIND_ANGLES:
         for direction, value in ORDINARY_WIND_DIRECTIONS.items():
             if angle == value:
@@ -140,6 +121,9 @@ def get_wind_direction(angle: int) -> None:
         for direction, (min, max) in SPECIFIC_WIND_DIRECTIONS.items():
             if min < angle < max:
                 return direction + f" ({angle}°)"
+    raise WindDirectionNotFoundError(
+        f"Invalid wind direction angle: {angle}. Must be between 0 and 360 degrees."
+    )
 
 
 def get_weather_descriptions(response) -> dict:
@@ -158,7 +142,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     weather_descriptions = get_weather_descriptions(response)
     console.print()
     console.print(
-        f"{city_name.title()} is {WEATHERS[weather_descriptions["weather_status"]]} today. ({weather_descriptions["weather_description"]})"
+        f"{city_name.title()} is {WEATHERS[weather_descriptions['weather_status']]} today. ({weather_descriptions['weather_description']})"
     )
     if unit_preference in ("2", "f"):
         temperature_fahrenheit = from_celsius_convert_to_fahrenheit(
@@ -168,12 +152,18 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
         console.print(f"Temperature: {temperature_fahrenheit:.2f}[bold cyan]°F[/]")
     else:
         console.print(
-            f"Temperature: {weather_descriptions["temperature_celsius"]:.2f}[bold cyan]°C[/]"
+            f"Temperature: {weather_descriptions['temperature_celsius']:.2f}[bold cyan]°C[/]"
         )
-    console.print(f"Humidity: {weather_descriptions["humidity"]}[bold cyan]%[/]")
-    console.print(
-        f"Wind speed: [bold cyan]{weather_descriptions["wind_speed"]}m/s[/] (Direction: [bold cyan]{get_wind_direction(weather_descriptions["wind_direction"])}[/])"
-    )
+    console.print(f"Humidity: {weather_descriptions['humidity']}[bold cyan]%[/]")
+    try:
+        angle = weather_descriptions["wind_direction"]
+        wind_direction = get_wind_direction(angle)
+    except WindDirectionNotFoundError:
+        console.print("[bold red]Wind direction information is not available.[/]")
+    else:
+        console.print(
+            f"Wind speed: [bold cyan]{weather_descriptions['wind_speed']}m/s[/] (Direction: [bold cyan]{wind_direction}[/])"
+        )
     console.input("[blue]Press enter to continue.[/]")
     console.print()
 
@@ -192,12 +182,29 @@ def check_city_weather(city_name: str, response) -> None:
     console.rule()
 
 
-def get_six_days_for_forecast():
+def get_six_days_for_forecast() -> list[str]:
+    six_days_list = []
     for i in range(0, 6):
         six_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
+    return six_days_list
 
 
-def parse_forecast_response(forecast_response):
+def parse_forecast_response(forecast_response) -> list:
+    six_days_list = get_six_days_for_forecast()
+    first_day_temperature = []
+    first_day_forecast_weather_count = Counter()
+    second_day_temperature = []
+    second_day_forecast_weather_count = Counter()
+    third_day_temperature = []
+    third_day_forecast_weather_count = Counter()
+    fourth_day_temperature = []
+    fourth_day_forecast_weather_count = Counter()
+    fifth_day_temperature = []
+    fifth_day_forecast_weather_count = Counter()
+    sixth_day_temperature = []
+    sixth_day_forecast_weather_count = Counter()
+    temperature_and_weather_forecast = []
+
     for forecast_info in forecast_response["list"]:
         if forecast_info["dt_txt"][:10] == six_days_list[0]:
             first_day_forecast_weather_count.update(
@@ -229,6 +236,7 @@ def parse_forecast_response(forecast_response):
                 [forecast_info["weather"][0]["main"]]
             )
             sixth_day_temperature.append(forecast_info["main"]["temp"])
+
     temperature_and_weather_forecast.append(
         (first_day_temperature, first_day_forecast_weather_count)
     )
@@ -247,6 +255,7 @@ def parse_forecast_response(forecast_response):
     temperature_and_weather_forecast.append(
         (sixth_day_temperature, sixth_day_forecast_weather_count)
     )
+    return temperature_and_weather_forecast
 
 
 def check_weather_forecast(response):
@@ -259,11 +268,12 @@ def check_weather_forecast(response):
         )
     ).json()
 
-    get_six_days_for_forecast()
-    parse_forecast_response(forecast_response)
+    temperature_and_weather_forecast = parse_forecast_response(forecast_response)
 
     unit_preference = get_unit_preference()
     console.print()
+    six_days_list = get_six_days_for_forecast()
+
     for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
         temperature_and_weather_forecast
     ):
@@ -290,8 +300,6 @@ def check_weather_forecast(response):
             f"The average temperature will be {average_temperature:.2f}{unit}."
         )
         console.print()
-    six_days_list.clear()
-    temperature_and_weather_forecast.clear()
     console.input("[blue]Press enter to continue.[/]")
     console.print()
     console.rule()
@@ -309,7 +317,6 @@ def weather_comparison(city_name: str, response):
 
         second_response = api_call(second_city_name)
         if second_response is not None:
-            checked_cities.add(second_city_name)
             while True:
                 second_city_info = get_weather_descriptions(second_response)
                 console.print("Which information do you want to compare?")
@@ -323,11 +330,11 @@ def weather_comparison(city_name: str, response):
                         == WEATHERS[second_city_info["weather_status"]]
                     ):
                         console.print(
-                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info["weather_status"]]}"
+                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info['weather_status']]}"
                         )
                     else:
                         console.print(
-                            f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
+                            f"{first_city_name} is {WEATHERS[first_city_info['weather_status']]}, while {second_city_name} is {WEATHERS[second_city_info['weather_status']]}."
                         )
                     break
                 elif info == Comparison_Features.TEMPERATURE:
@@ -388,11 +395,13 @@ def function_select(city_name: str, response) -> None:
             weather_comparison(city_name, response)
 
 
-def get_all_cities() -> None:
+def get_all_cities() -> list[str]:
     """store all city name into a list"""
+    city_list = []
     with open("cities2.txt", "r", encoding="utf-8") as file:
         for city_name in file:
             city_list.append(city_name.rstrip())
+    return city_list
 
 
 def main():
