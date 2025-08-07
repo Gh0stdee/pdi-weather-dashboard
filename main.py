@@ -1,6 +1,6 @@
-import json
 from collections import Counter
 from datetime import datetime, timedelta
+from enum import Enum
 
 import requests
 from decouple import config
@@ -13,12 +13,17 @@ WEATHER_SERVICE = (
 )
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 
-WEATHER_DETAILS = "d"
-WEATHER_FORECAST = "f"
-WEATHER_COMPARISON = "c"
+
+class Dashboard_Functions(Enum):
+    WEATHER_DETAILS = "d"
+    WEATHER_FORECAST = "f"
+    WEATHER_COMPARISON = "c"
+
 
 console = Console()
 CURRENT_DAY = datetime.now()
+
+"""list for storing days of the six day forecast"""
 six_days_list = []
 FUNCTIONS = [
     "Weather Details [bold blue](d)[/]",
@@ -69,11 +74,18 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
     "NNW": (315, 360),
 }
 COMPARISON_LIST: list[str] = ["Weather", "Temperature"]
-WEATHER = "1"
-TEMPERATURE = "2"
 
+
+class Comparison_Features(Enum):
+    WEATHER = "1"
+    TEMPERATURE = "2"
+
+
+"""list of all cities"""
 city_list = []
-checked_cities = []
+
+"""set of all cities checked by user"""
+checked_cities = set()
 
 first_day_temperature = []
 first_day_forecast_weather_count = Counter()
@@ -109,13 +121,13 @@ def api_call(city_name: str):
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         return None
 
-    if response["cod"] == "404":
+    if response["cod"] in ("400", "404"):
         error_message = f"[bold red]{response['message'].capitalize()}[/]"
         console.print(error_message)
         return None
 
     console.print()
-    add_to_checked_city_list(city_name.title())
+    checked_cities.add(city_name.title())
     return response
 
 
@@ -246,6 +258,7 @@ def check_weather_forecast(response):
             API_KEY=API_KEY,
         )
     ).json()
+
     get_six_days_for_forecast()
     parse_forecast_response(forecast_response)
 
@@ -277,6 +290,8 @@ def check_weather_forecast(response):
             f"The average temperature will be {average_temperature:.2f}{unit}."
         )
         console.print()
+    six_days_list.clear()
+    temperature_and_weather_forecast.clear()
     console.input("[blue]Press enter to continue.[/]")
     console.print()
     console.rule()
@@ -294,7 +309,7 @@ def weather_comparison(city_name: str, response):
 
         second_response = api_call(second_city_name)
         if second_response is not None:
-            add_to_checked_city_list(second_city_name)
+            checked_cities.add(second_city_name)
             while True:
                 second_city_info = get_weather_descriptions(second_response)
                 console.print("Which information do you want to compare?")
@@ -302,7 +317,7 @@ def weather_comparison(city_name: str, response):
                 for index, info_to_compare in enumerate(COMPARISON_LIST, start=1):
                     console.print(f"{index}. {info_to_compare}")
                 info = console.input().strip()
-                if info == WEATHER:
+                if info == Comparison_Features.WEATHER:
                     if (
                         WEATHERS[first_city_info["weather_status"]]
                         == WEATHERS[second_city_info["weather_status"]]
@@ -315,7 +330,7 @@ def weather_comparison(city_name: str, response):
                             f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
                         )
                     break
-                elif info == TEMPERATURE:
+                elif info == Comparison_Features.TEMPERATURE:
                     console.print()
                     unit_preference = get_unit_preference()
                     console.print()
@@ -348,7 +363,7 @@ def weather_comparison(city_name: str, response):
                     break
                 else:
                     console.print("[bold red]Invalid input.[/]")
-        console.input("[blue]Press enter to continue.[/]")
+            console.input("[blue]Press enter to continue.[/]")
         console.print()
         console.rule()
         break
@@ -365,26 +380,19 @@ def function_select(city_name: str, response) -> None:
         function_choice = input().strip().lower()
         console.print()
         console.rule()
-        if function_choice in ("1", WEATHER_DETAILS):
+        if function_choice in ("1", Dashboard_Functions.WEATHER_DETAILS):
             check_city_weather(city_name, response)
-        elif function_choice in ("2", WEATHER_FORECAST):
+        elif function_choice in ("2", Dashboard_Functions.WEATHER_FORECAST):
             check_weather_forecast(response)
-        elif function_choice in ("3", WEATHER_COMPARISON):
+        elif function_choice in ("3", Dashboard_Functions.WEATHER_COMPARISON):
             weather_comparison(city_name, response)
 
 
 def get_all_cities() -> None:
     """store all city name into a list"""
-    with open(".cities.json", "r", encoding="utf-8") as jsonfile:
-        data = json.load(jsonfile)
-    for city in data:
-        city_list.append(city["name"])
-
-
-def add_to_checked_city_list(city_name: str) -> None:
-    """add new city name into checked city list"""
-    if city_name not in checked_cities:
-        checked_cities.append(city_name)
+    with open("cities2.txt", "r", encoding="utf-8") as file:
+        for city_name in file:
+            city_list.append(city_name.rstrip())
 
 
 def main():
