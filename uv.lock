@@ -143,6 +143,7 @@ dependencies = [
 dev = [
     { name = "mypy" },
     { name = "ty" },
+    { name = "types-requests" },
 ]
 
 [package.metadata]
@@ -157,6 +158,7 @@ requires-dist = [
 dev = [
     { name = "mypy", specifier = ">=1.17.1" },
     { name = "ty", specifier = ">=0.0.1a16" },
+    { name = "types-requests", specifier = ">=2.32.4.20250611" },
 ]
 
 [[package]]
@@ -240,6 +242,7 @@ wheels = [
 ]
 
 [[package]]
+
 name = "typer"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }

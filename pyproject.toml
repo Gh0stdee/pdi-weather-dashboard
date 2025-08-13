@@ -15,4 +15,5 @@ dependencies = [
 dev = [
     "mypy>=1.17.1",
     "ty>=0.0.1a16",
+    "types-requests>=2.32.4.20250611",
 ]
