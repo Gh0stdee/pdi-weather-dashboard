@@ -3,9 +3,14 @@ from datetime import datetime, timedelta
 from enum import StrEnum
 
 import requests
+import requests_cache
+import typer
 from decouple import config
 from rich.console import Console
 
+app = typer.Typer()
+
+response = None
 API_KEY = config("API_KEY")
 BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = (
@@ -82,8 +87,26 @@ class Comparison_Features(StrEnum):
 """list of all cities"""
 city_list = []
 
-"""set of all cities checked by user"""
-checked_cities = set()
+
+@app.command()
+def init(
+    city_name: str = typer.Argument(..., help="The city name for checking its weather"),
+):
+    """Enter the city name before utilizing other functions"""
+    console.print("Welcome to your weather dashboard.")
+    console.print()
+    while True:
+        city_name = (
+            console.input("Input a city name: [bold red](q to quit)[/] ")
+            .strip()
+            .lower()
+        )
+        if city_name == "q":
+            break
+        response = api_call(city_name)
+        if response is not None:
+            console.print(f"You have selected {city_name}.")
+            function_select(response, city_name)
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -95,24 +118,24 @@ def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
 
 
 def api_call(city_name: str):
+    # if !(response.from_cache):
     try:
         response = requests.get(
             WEATHER_SERVICE.format(
                 BASE_URL=BASE_URL, city_name=city_name, API_KEY=API_KEY
             )
-        ).json()
+        )
+        response_json = response.json()
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         return None
 
-    if response["cod"] in ("400", "404"):
-        error_message = f"[bold red]{response['message'].capitalize()}[/]"
+    if response_json["cod"] in ("400", "404"):
+        error_message = f"[bold red]{response_json['message'].capitalize()}[/]"
         console.print(error_message)
         return None
-
     console.print()
-    checked_cities.add(city_name.title())
-    return response
+    return response_json
 
 
 def get_wind_direction(angle: int) -> None:
@@ -142,7 +165,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     weather_descriptions = get_weather_descriptions(response)
     console.print()
     console.print(
-        f"{city_name.title()} is {WEATHERS[weather_descriptions["weather_status"]]} today. ({weather_descriptions["weather_description"]})"
+        f"{city_name.title().strip()} is {WEATHERS[weather_descriptions["weather_status"]]} today. ({weather_descriptions["weather_description"]})"
     )
     if unit_preference in ("2", "f"):
         temperature_fahrenheit = from_celsius_convert_to_fahrenheit(
@@ -170,7 +193,11 @@ def get_unit_preference() -> str:
     return console.input().strip().lower()
 
 
-def check_city_weather(city_name: str, response) -> None:
+@app.command()
+def check_city_weather(
+    response, city_name: str = typer.Argument(..., help="Name of city to be checked")
+) -> None:
+    """Get weather, temperature, humdity, wind speed of the city"""
     unit_preference = get_unit_preference()
     print_weather_descriptions(response, city_name, unit_preference)
     console.rule()
@@ -249,7 +276,9 @@ def parse_forecast_response(forecast_response, six_days_list):
     return temperature_and_weather_forecast
 
 
+@app.command()
 def check_weather_forecast(response):
+    """Get a 6 day temperature and weather forecast of the city"""
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
@@ -299,23 +328,29 @@ def check_weather_forecast(response):
     console.rule()
 
 
+@app.command()
 def weather_comparison(city_name: str, response):
-    first_city_name = city_name.title()
+    """Compare the city's temperature and weather forecast against another city"""
+    first_city_name = city_name.title().strip()
     first_city_info = get_weather_descriptions(response)
     while True:
-        second_city_name = console.input(
-            "Please input another city name for comparison: [bold red](q to quit)[/]\n"
-        ).title()
+        second_city_name = (
+            console.input(
+                "Please input another city name for comparison: [bold red](q to quit)[/]\n"
+            )
+            .title()
+            .strip()
+        )
         if second_city_name == "Q":
             break
-
+        if first_city_name == second_city_name:
+            console.print()
+            continue
         second_response = api_call(second_city_name)
         if second_response is not None:
-            checked_cities.add(second_city_name)
             while True:
                 second_city_info = get_weather_descriptions(second_response)
                 console.print("Which information do you want to compare?")
-                # TODO: create the comparison list and print out a list for user to choose
                 for index, info_to_compare in enumerate(COMPARISON_LIST, start=1):
                     console.print(f"{index}. {info_to_compare}")
                 info = console.input().strip()
@@ -371,7 +406,9 @@ def weather_comparison(city_name: str, response):
         break
 
 
-def function_select(city_name: str, response) -> None:
+def function_select(
+    response, city_name: str = typer.Argument(..., help="The city name")
+) -> None:
     """Select from functions"""
     function_choice = None
     while function_choice not in ("q", "4"):
@@ -383,7 +420,7 @@ def function_select(city_name: str, response) -> None:
         console.print()
         console.rule()
         if function_choice in ("1", Dashboard_Functions.WEATHER_DETAILS):
-            check_city_weather(city_name, response)
+            check_city_weather(response, city_name)
         elif function_choice in ("2", Dashboard_Functions.WEATHER_FORECAST):
             check_weather_forecast(response)
         elif function_choice in ("3", Dashboard_Functions.WEATHER_COMPARISON):
@@ -397,21 +434,6 @@ def get_all_cities() -> None:
             city_list.append(city_name.rstrip())
 
 
-def main():
-    console.print("Welcome to your weather dashboard.")
-    console.print()
-    while True:
-        city_name = (
-            console.input("Input a city name: [bold red](q to quit)[/] ")
-            .strip()
-            .lower()
-        )
-        if city_name == "q":
-            break
-        response = api_call(city_name)
-        if response is not None:
-            function_select(city_name, response)
-
-
 if __name__ == "__main__":
-    main()
+    requests_cache.install_cache("cache")
+    app()
