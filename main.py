@@ -1,6 +1,6 @@
 from collections import Counter
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import StrEnum
 
 import requests
 from decouple import config
@@ -14,7 +14,7 @@ WEATHER_SERVICE = (
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 
 
-class Dashboard_Functions(Enum):
+class Dashboard_Functions(StrEnum):
     WEATHER_DETAILS = "d"
     WEATHER_FORECAST = "f"
     WEATHER_COMPARISON = "c"
@@ -23,8 +23,6 @@ class Dashboard_Functions(Enum):
 console = Console()
 CURRENT_DAY = datetime.now()
 
-"""list for storing days of the six day forecast"""
-six_days_list = []
 FUNCTIONS = [
     "Weather Details [bold blue](d)[/]",
     "Weather Forecast [bold blue](f)[/]",
@@ -73,12 +71,12 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
     "WNW": (270, 315),
     "NNW": (315, 360),
 }
-COMPARISON_LIST: list[str] = ["Weather", "Temperature"]
+COMPARISON_LIST: list[str] = ["Weather [blue](w)[/]", "Temperature [blue](t)[/]"]
 
 
-class Comparison_Features(Enum):
-    WEATHER = "1"
-    TEMPERATURE = "2"
+class Comparison_Features(StrEnum):
+    WEATHER = "w"
+    TEMPERATURE = "t"
 
 
 """list of all cities"""
@@ -86,20 +84,6 @@ city_list = []
 
 """set of all cities checked by user"""
 checked_cities = set()
-
-first_day_temperature = []
-first_day_forecast_weather_count = Counter()
-second_day_temperature = []
-second_day_forecast_weather_count = Counter()
-third_day_temperature = []
-third_day_forecast_weather_count = Counter()
-fourth_day_temperature = []
-fourth_day_forecast_weather_count = Counter()
-fifth_day_temperature = []
-fifth_day_forecast_weather_count = Counter()
-sixth_day_temperature = []
-sixth_day_forecast_weather_count = Counter()
-temperature_and_weather_forecast = []
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -193,11 +177,26 @@ def check_city_weather(city_name: str, response) -> None:
 
 
 def get_six_days_for_forecast():
+    six_days_list = []
     for i in range(0, 6):
         six_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
+    return six_days_list
 
 
-def parse_forecast_response(forecast_response):
+def parse_forecast_response(forecast_response, six_days_list):
+    first_day_temperature = []
+    first_day_forecast_weather_count = Counter()
+    second_day_temperature = []
+    second_day_forecast_weather_count = Counter()
+    third_day_temperature = []
+    third_day_forecast_weather_count = Counter()
+    fourth_day_temperature = []
+    fourth_day_forecast_weather_count = Counter()
+    fifth_day_temperature = []
+    fifth_day_forecast_weather_count = Counter()
+    sixth_day_temperature = []
+    sixth_day_forecast_weather_count = Counter()
+    temperature_and_weather_forecast = []
     for forecast_info in forecast_response["list"]:
         if forecast_info["dt_txt"][:10] == six_days_list[0]:
             first_day_forecast_weather_count.update(
@@ -247,6 +246,7 @@ def parse_forecast_response(forecast_response):
     temperature_and_weather_forecast.append(
         (sixth_day_temperature, sixth_day_forecast_weather_count)
     )
+    return temperature_and_weather_forecast
 
 
 def check_weather_forecast(response):
@@ -259,8 +259,10 @@ def check_weather_forecast(response):
         )
     ).json()
 
-    get_six_days_for_forecast()
-    parse_forecast_response(forecast_response)
+    six_days_list = get_six_days_for_forecast()
+    temperature_and_weather_forecast = parse_forecast_response(
+        forecast_response, six_days_list
+    )
 
     unit_preference = get_unit_preference()
     console.print()
@@ -317,7 +319,7 @@ def weather_comparison(city_name: str, response):
                 for index, info_to_compare in enumerate(COMPARISON_LIST, start=1):
                     console.print(f"{index}. {info_to_compare}")
                 info = console.input().strip()
-                if info == Comparison_Features.WEATHER:
+                if info in ("1", Comparison_Features.WEATHER):
                     if (
                         WEATHERS[first_city_info["weather_status"]]
                         == WEATHERS[second_city_info["weather_status"]]
@@ -330,7 +332,7 @@ def weather_comparison(city_name: str, response):
                             f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
                         )
                     break
-                elif info == Comparison_Features.TEMPERATURE:
+                elif info in (2, Comparison_Features.TEMPERATURE):
                     console.print()
                     unit_preference = get_unit_preference()
                     console.print()
