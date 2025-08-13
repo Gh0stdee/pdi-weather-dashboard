@@ -406,6 +406,7 @@ def weather_comparison(city_name: str, response):
         break
 
 
+@app.command()
 def function_select(
     response, city_name: str = typer.Argument(..., help="The city name")
 ) -> None:
