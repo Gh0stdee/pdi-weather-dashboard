@@ -8,6 +8,7 @@ dependencies = [
     "python-decouple>=3.8",
     "requests>=2.32.4",
     "rich>=14.1.0",
+    "typer>=0.16.0",
 ]
 
 [dependency-groups]
