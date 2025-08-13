@@ -17,8 +17,8 @@ WEATHER_SERVICE = (
     f"{BASE_URL}weather?appid={API_KEY}" + "&q={city_name}&appid={API_KEY}"
 )
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
-
-requests_cache.install_cache("cache.db", backend="sqlite", expire_after=600)
+ONE_DAY = 86400
+requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
 
 
 class Dashboard_Functions(StrEnum):
@@ -32,16 +32,15 @@ class UnitType(StrEnum):
     FAHRENHEIT = "f"
 
 
+class Comparison_Features(StrEnum):
+    ALL = "a"
+    WEATHER = "w"
+    TEMPERATURE = "t"
+
+
 console = Console()
 CURRENT_DAY = datetime.now()
 
-FUNCTIONS = [
-    "Weather Details [bold blue](d)[/]",
-    "Weather Forecast [bold blue](f)[/]",
-    "Weather Comparison [bold blue](c)[/]",
-    "Check Another City [bold red](q)[/]",
-]
-UNITS = ["Degree Celcius °C [bold blue](default)[/]", "Fahrenheit °F [bold blue](f)[/]"]
 WEATHERS = {
     "Clear": "sunny",
     "Clouds": "cloudy",
@@ -85,35 +84,8 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 }
 COMPARISON_LIST: list[str] = ["Weather [blue](w)[/]", "Temperature [blue](t)[/]"]
 
-
-class Comparison_Features(StrEnum):
-    WEATHER = "w"
-    TEMPERATURE = "t"
-
-
 """list of all cities"""
 city_list = []
-
-
-@app.command()
-def init(
-    city_name: str = typer.Argument(..., help="The city name for checking its weather"),
-):
-    """Enter the city name before utilizing other functions"""
-    console.print("Welcome to your weather dashboard.")
-    console.print()
-    while True:
-        city_name = (
-            console.input("Input a city name: [bold red](q to quit)[/] ")
-            .strip()
-            .lower()
-        )
-        if city_name == "q":
-            break
-        response = api_call(city_name)
-        if response is not None:
-            console.print(f"You have selected {city_name}.")
-            function_select(response, city_name)
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -124,28 +96,27 @@ def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
     return temperature * 9 / 5 + 32
 
 
-def api_call(city_name: str):
+def call_api(city_name: str, compare: bool = False):
     # if !(response.from_cache):
     try:
         response = requests.get(
             WEATHER_SERVICE.format(
                 BASE_URL=BASE_URL, city_name=city_name, API_KEY=API_KEY
             )
-        )
-        response_json = response.json()
+        ).json()
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         return None
 
-    if response_json["cod"] in ("400", "404"):
-        error_message = f"[bold red]{response_json['message'].capitalize()}[/]"
-        console.print(error_message)
+    if response["cod"] in ("400", "404"):
+        if not compare:
+            error_message = f"[bold red]{response['message'].capitalize()}[/]"
+            console.print(error_message)
         return None
-    console.print()
-    return response_json
+    return response
 
 
-def get_wind_direction(angle: int) -> None:
+def get_wind_direction(angle: int) -> str:
     if angle in ORDINARY_WIND_ANGLES:
         for direction, value in ORDINARY_WIND_DIRECTIONS.items():
             if angle == value:
@@ -154,6 +125,7 @@ def get_wind_direction(angle: int) -> None:
         for direction, (min, max) in SPECIFIC_WIND_DIRECTIONS.items():
             if min < angle < max:
                 return direction + f" ({angle}°)"
+    return "(Invalid wind direction)"
 
 
 def get_weather_descriptions(response) -> dict:
@@ -192,21 +164,20 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     console.print()
 
 
-def get_unit_preference() -> str:
-    """Ask user for unit preference: f: fahrenheit anything else: celsius"""
-    console.print("Which unit system do you prefer")
-    for index, unit in enumerate(UNITS, start=1):
-        console.print(f"{index}. {unit}")
-    return console.input().strip().lower()
-
-
 @app.command()
-def check_city_weather(
-    response, city_name: str = typer.Argument(..., help="Name of city to be checked")
+def check_weather(
+    city: str = typer.Argument(..., help="Name of city to be checked"),
+    unit: UnitType = typer.Argument(
+        UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
+    ),
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
-    unit_preference = get_unit_preference()
-    print_weather_descriptions(response, city_name, unit_preference)
+    response = call_api(city)
+    if response is None:
+        console.print(f"No response for city {city}.")
+        raise typer.Abort()
+
+    print_weather_descriptions(response, city, unit)
     console.rule()
 
 
@@ -284,9 +255,14 @@ def parse_forecast_response(forecast_response, six_days_list):
 
 
 @app.command()
-def check_weather_forecast(city: str, unit: UnitType = UnitType.CELSIUS):
+def check_forecast(
+    city: str = typer.Argument(..., help="Name of the city to be forecasted"),
+    unit: UnitType = typer.Argument(
+        UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
+    ),
+):
     """Get a 6 day temperature and weather forecast of the city"""
-    response = api_call(city)
+    response = call_api(city)
     if response is None:
         console.print(f"No response for city {city}.")
         raise typer.Abort()
@@ -304,8 +280,6 @@ def check_weather_forecast(city: str, unit: UnitType = UnitType.CELSIUS):
     temperature_and_weather_forecast = parse_forecast_response(
         forecast_response, six_days_list
     )
-
-    unit_preference = unit or get_unit_preference()
     console.print()
     for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
         temperature_and_weather_forecast
@@ -322,15 +296,15 @@ def check_weather_forecast(city: str, unit: UnitType = UnitType.CELSIUS):
         average_temperature = from_kelvin_convert_to_celsius(
             sum(temperatures_of_the_day) / len(temperatures_of_the_day)
         )
-        if unit_preference in ("2", "f"):
-            unit = "°F"
+        if unit == UnitType.FAHRENHEIT:
+            unit_symbol = "°F"
             average_temperature = from_celsius_convert_to_fahrenheit(
                 average_temperature
             )
         else:
-            unit = "°C"
+            unit_symbol = "°C"
         console.print(
-            f"The average temperature will be {average_temperature:.2f}{unit}."
+            f"The average temperature will be {average_temperature:.2f}{unit_symbol}."
         )
         console.print()
     six_days_list.clear()
@@ -340,104 +314,95 @@ def check_weather_forecast(city: str, unit: UnitType = UnitType.CELSIUS):
     console.rule()
 
 
-@app.command()
-def weather_comparison(city_name: str, response):
-    """Compare the city's temperature and weather forecast against another city"""
-    first_city_name = city_name.title().strip()
-    first_city_info = get_weather_descriptions(response)
-    while True:
-        second_city_name = (
-            console.input(
-                "Please input another city name for comparison: [bold red](q to quit)[/]\n"
-            )
-            .title()
-            .strip()
+def print_compared_weather(
+    first_city_name, first_city_info, second_city_name, second_city_info
+):
+    if (
+        WEATHERS[first_city_info["weather_status"]]
+        == WEATHERS[second_city_info["weather_status"]]
+    ):
+        console.print(
+            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info['weather_status']]}"
         )
-        if second_city_name == "Q":
-            break
-        if first_city_name == second_city_name:
-            console.print()
-            continue
-        second_response = api_call(second_city_name)
-        if second_response is not None:
-            while True:
-                second_city_info = get_weather_descriptions(second_response)
-                console.print("Which information do you want to compare?")
-                for index, info_to_compare in enumerate(COMPARISON_LIST, start=1):
-                    console.print(f"{index}. {info_to_compare}")
-                info = console.input().strip()
-                if info in ("1", Comparison_Features.WEATHER):
-                    if (
-                        WEATHERS[first_city_info["weather_status"]]
-                        == WEATHERS[second_city_info["weather_status"]]
-                    ):
-                        console.print(
-                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info['weather_status']]}"
-                        )
-                    else:
-                        console.print(
-                            f"{first_city_name} is {WEATHERS[first_city_info['weather_status']]}, while {second_city_name} is {WEATHERS[second_city_info['weather_status']]}."
-                        )
-                    break
-                elif info in (2, Comparison_Features.TEMPERATURE):
-                    console.print()
-                    unit_preference = get_unit_preference()
-                    console.print()
-                    first_city_temp = first_city_info["temperature_celsius"]
-                    second_city_temp = second_city_info["temperature_celsius"]
-                    difference = first_city_temp - second_city_temp
-                    if unit_preference in ("2", "f"):
-                        difference *= 9 / 5
-                        unit = "°F"
-                        first_city_temp = from_celsius_convert_to_fahrenheit(
-                            first_city_temp
-                        )
-                        second_city_temp = from_celsius_convert_to_fahrenheit(
-                            second_city_temp
-                        )
-                    else:
-                        unit = "°C"
-                    if difference < 0:
-                        console.print(
-                            f"{first_city_name}({first_city_temp:.2f}{unit}) is {abs(difference):.2f} {unit} colder than {second_city_name}({second_city_temp:.2f}{unit})."
-                        )
-                    elif difference > 0:
-                        console.print(
-                            f"{first_city_name}({first_city_temp:.2f}{unit}) is {difference:.2f} {unit} colder than {second_city_name}({second_city_temp:.2f}{unit})."
-                        )
-                    else:
-                        console.print(
-                            f"{first_city_name} has the same temperaure as {second_city_name} ({second_city_temp:.2f}{unit})."
-                        )
-                    break
-                else:
-                    console.print("[bold red]Invalid input.[/]")
-            console.input("[blue]Press enter to continue.[/]")
-        console.print()
-        console.rule()
-        break
+    else:
+        console.print(
+            f"{first_city_name} is {WEATHERS[first_city_info['weather_status']]}, while {second_city_name} is {WEATHERS[second_city_info['weather_status']]}."
+        )
+
+
+def print_compared_temperature(
+    first_city_name, first_city_info, second_city_name, second_city_info, unit
+):
+    first_city_temp = first_city_info["temperature_celsius"]
+    second_city_temp = second_city_info["temperature_celsius"]
+    difference = first_city_temp - second_city_temp
+    if unit == UnitType.FAHRENHEIT:
+        difference *= 9 / 5
+        unit_symbol = "°F"
+        first_city_temp = from_celsius_convert_to_fahrenheit(first_city_temp)
+        second_city_temp = from_celsius_convert_to_fahrenheit(second_city_temp)
+    else:
+        unit_symbol = "°C"
+    if difference < 0:
+        console.print(
+            f"{first_city_name}({first_city_temp:.2f}{unit_symbol}) is {abs(difference):.2f} {unit_symbol} colder than {second_city_name}({second_city_temp:.2f}{unit_symbol})."
+        )
+    elif difference > 0:
+        console.print(
+            f"{first_city_name}({first_city_temp:.2f}{unit_symbol}) is {difference:.2f} {unit_symbol} colder than {second_city_name}({second_city_temp:.2f}{unit_symbol})."
+        )
+    else:
+        console.print(
+            f"{first_city_name} has the same temperaure as {second_city_name} ({second_city_temp:.2f}{unit_symbol})."
+        )
 
 
 @app.command()
-def function_select(
-    response, city_name: str = typer.Argument(..., help="The city name")
-) -> None:
-    """Select from functions"""
-    function_choice = None
-    while function_choice not in ("q", "4"):
-        console.print("Select a function:")
-        for number, function in enumerate(FUNCTIONS, start=1):
-            console.print(f"{number}. {function}")
-            console.print()
-        function_choice = input().strip().lower()
-        console.print()
-        console.rule()
-        if function_choice in ("1", Dashboard_Functions.WEATHER_DETAILS):
-            check_city_weather(response, city_name)
-        elif function_choice in ("2", Dashboard_Functions.WEATHER_FORECAST):
-            check_weather_forecast(response)
-        elif function_choice in ("3", Dashboard_Functions.WEATHER_COMPARISON):
-            weather_comparison(city_name, response)
+def compare_weather(
+    first_city: str = typer.Argument(..., help="First city to compare with"),
+    second_city: str = typer.Argument(..., help="Second city to compare with"),
+    unit: UnitType = typer.Argument(
+        UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
+    ),
+    feature: Comparison_Features = typer.Argument(
+        Comparison_Features.ALL, help="Temperature or Weather of the cities"
+    ),
+):
+    """Compare city's temperature and weather forecast against another city"""
+    console.print()
+    response = call_api(first_city, compare=True)
+    if response is None:
+        console.print("[bold red]The first city name is invalid.[/]")
+        raise typer.Abort()
+    first_city_name = first_city.title().strip()
+    first_city_info = get_weather_descriptions(response)
+
+    second_response = call_api(second_city, compare=True)
+    if second_response is None:
+        console.print("[bold red]The second city name is invalid.[/]")
+        raise typer.Abort()
+    second_city_name = second_city.title().strip()
+    second_city_info = get_weather_descriptions(second_response)
+
+    if feature == Comparison_Features.WEATHER:
+        print_compared_weather(
+            first_city_name, first_city_info, second_city_name, second_city_info
+        )
+    elif feature == Comparison_Features.TEMPERATURE:
+        print_compared_temperature(
+            first_city_name, first_city_info, second_city_name, second_city_info, unit
+        )
+    elif feature == Comparison_Features.ALL:
+        print_compared_weather(
+            first_city_name, first_city_info, second_city_name, second_city_info
+        )
+        print_compared_temperature(
+            first_city_name, first_city_info, second_city_name, second_city_info, unit
+        )
+    else:
+        console.print("[bold red]Invalid input.[/]")
+    console.print()
+    console.rule()
 
 
 def get_all_cities() -> None:
