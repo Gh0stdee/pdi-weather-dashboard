@@ -18,11 +18,18 @@ WEATHER_SERVICE = (
 )
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 
+requests_cache.install_cache("cache.db", backend="sqlite", expire_after=600)
+
 
 class Dashboard_Functions(StrEnum):
     WEATHER_DETAILS = "d"
     WEATHER_FORECAST = "f"
     WEATHER_COMPARISON = "c"
+
+
+class UnitType(StrEnum):
+    CELSIUS = "c"
+    FAHRENHEIT = "f"
 
 
 console = Console()
@@ -165,7 +172,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     weather_descriptions = get_weather_descriptions(response)
     console.print()
     console.print(
-        f"{city_name.title().strip()} is {WEATHERS[weather_descriptions["weather_status"]]} today. ({weather_descriptions["weather_description"]})"
+        f"{city_name.title().strip()} is {WEATHERS[weather_descriptions['weather_status']]} today. ({weather_descriptions['weather_description']})"
     )
     if unit_preference in ("2", "f"):
         temperature_fahrenheit = from_celsius_convert_to_fahrenheit(
@@ -175,11 +182,11 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
         console.print(f"Temperature: {temperature_fahrenheit:.2f}[bold cyan]°F[/]")
     else:
         console.print(
-            f"Temperature: {weather_descriptions["temperature_celsius"]:.2f}[bold cyan]°C[/]"
+            f"Temperature: {weather_descriptions['temperature_celsius']:.2f}[bold cyan]°C[/]"
         )
-    console.print(f"Humidity: {weather_descriptions["humidity"]}[bold cyan]%[/]")
+    console.print(f"Humidity: {weather_descriptions['humidity']}[bold cyan]%[/]")
     console.print(
-        f"Wind speed: [bold cyan]{weather_descriptions["wind_speed"]}m/s[/] (Direction: [bold cyan]{get_wind_direction(weather_descriptions["wind_direction"])}[/])"
+        f"Wind speed: [bold cyan]{weather_descriptions['wind_speed']}m/s[/] (Direction: [bold cyan]{get_wind_direction(weather_descriptions['wind_direction'])}[/])"
     )
     console.input("[blue]Press enter to continue.[/]")
     console.print()
@@ -277,8 +284,13 @@ def parse_forecast_response(forecast_response, six_days_list):
 
 
 @app.command()
-def check_weather_forecast(response):
+def check_weather_forecast(city: str, unit: UnitType = UnitType.CELSIUS):
     """Get a 6 day temperature and weather forecast of the city"""
+    response = api_call(city)
+    if response is None:
+        console.print(f"No response for city {city}.")
+        raise typer.Abort()
+
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
@@ -293,7 +305,7 @@ def check_weather_forecast(response):
         forecast_response, six_days_list
     )
 
-    unit_preference = get_unit_preference()
+    unit_preference = unit or get_unit_preference()
     console.print()
     for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
         temperature_and_weather_forecast
@@ -360,11 +372,11 @@ def weather_comparison(city_name: str, response):
                         == WEATHERS[second_city_info["weather_status"]]
                     ):
                         console.print(
-                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info["weather_status"]]}"
+                            f"Both {first_city_name} and {second_city_name} is {WEATHERS[first_city_info['weather_status']]}"
                         )
                     else:
                         console.print(
-                            f"{first_city_name} is {WEATHERS[first_city_info["weather_status"]]}, while {second_city_name} is {WEATHERS[second_city_info["weather_status"]]}."
+                            f"{first_city_name} is {WEATHERS[first_city_info['weather_status']]}, while {second_city_name} is {WEATHERS[second_city_info['weather_status']]}."
                         )
                     break
                 elif info in (2, Comparison_Features.TEMPERATURE):
@@ -436,5 +448,4 @@ def get_all_cities() -> None:
 
 
 if __name__ == "__main__":
-    requests_cache.install_cache("cache")
     app()
