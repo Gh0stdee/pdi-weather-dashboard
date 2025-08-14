@@ -1,6 +1,7 @@
 from collections import Counter
 from datetime import datetime, timedelta
-from enum import StrEnum
+from difflib import get_close_matches
+from enum import IntEnum, StrEnum
 
 import requests
 import requests_cache
@@ -10,7 +11,6 @@ from rich.console import Console
 
 app = typer.Typer()
 
-response = None
 API_KEY = config("API_KEY")
 BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = (
@@ -22,9 +22,9 @@ requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
 
 
 class Dashboard_Functions(StrEnum):
-    WEATHER_DETAILS = "d"
-    WEATHER_FORECAST = "f"
-    WEATHER_COMPARISON = "c"
+    CHECK_WEATHER = "w"
+    CHECK_FORECAST = "f"
+    CHECK_COMPARISON = "c"
 
 
 class UnitType(StrEnum):
@@ -32,10 +32,15 @@ class UnitType(StrEnum):
     FAHRENHEIT = "f"
 
 
-class Comparison_Features(StrEnum):
+class Comparison_Feature(StrEnum):
     ALL = "a"
     WEATHER = "w"
     TEMPERATURE = "t"
+
+
+class API_Response(IntEnum):
+    JSON = 0
+    CITY = 1
 
 
 console = Console()
@@ -84,9 +89,6 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 }
 COMPARISON_LIST: list[str] = ["Weather [blue](w)[/]", "Temperature [blue](t)[/]"]
 
-"""list of all cities"""
-city_list = []
-
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
     return temperature - 273.15
@@ -96,24 +98,50 @@ def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
     return temperature * 9 / 5 + 32
 
 
-def call_api(city_name: str, compare: bool = False):
-    # if !(response.from_cache):
+def fuzzy_search(city: str) -> None | str:
+    new_search = get_close_matches(city, get_all_cities(), n=1)
+    if len(new_search) < 1:
+        return None
+    else:
+        return new_search[0]
+
+
+def call_api(city: str, compare: bool = False):
     try:
-        response = requests.get(
-            WEATHER_SERVICE.format(
-                BASE_URL=BASE_URL, city_name=city_name, API_KEY=API_KEY
-            )
+        first_response_json = requests.get(
+            WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
         ).json()
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
-        return None
+        raise typer.Abort()
 
-    if response["cod"] in ("400", "404"):
+    if first_response_json["cod"] == "400":
         if not compare:
-            error_message = f"[bold red]{response['message'].capitalize()}[/]"
+            error_message = (
+                f"[bold red]{first_response_json['message'].capitalize()}[/]"
+            )
             console.print(error_message)
-        return None
-    return response
+            return_response_json = None
+    elif first_response_json["cod"] == "404":
+        new_city = fuzzy_search(city.title().strip())
+        if new_city is None:
+            if not compare:
+                error_message = (
+                    f"[bold red]{first_response_json['message'].capitalize()}[/]"
+                )
+                console.print(error_message)
+            return_response_json = None
+        else:
+            city = new_city
+            return_response_json = requests.get(
+                WEATHER_SERVICE.format(
+                    BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
+                )
+            ).json()
+    else:
+        return_response_json = first_response_json
+
+    return [return_response_json, city]
 
 
 def get_wind_direction(angle: int) -> str:
@@ -160,8 +188,6 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     console.print(
         f"Wind speed: [bold cyan]{weather_descriptions['wind_speed']}m/s[/] (Direction: [bold cyan]{get_wind_direction(weather_descriptions['wind_direction'])}[/])"
     )
-    console.input("[blue]Press enter to continue.[/]")
-    console.print()
 
 
 @app.command()
@@ -173,22 +199,24 @@ def check_weather(
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
     response = call_api(city)
-    if response is None:
-        console.print(f"No response for city {city}.")
+    if response[API_Response.JSON] is None:
         raise typer.Abort()
 
-    print_weather_descriptions(response, city, unit)
+    print_weather_descriptions(
+        response[API_Response.JSON], response[API_Response.CITY], unit
+    )
+    console.print()
     console.rule()
 
 
-def get_six_days_for_forecast():
-    six_days_list = []
-    for i in range(0, 6):
-        six_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
-    return six_days_list
+def get_five_days_for_forecast():
+    five_days_list = []
+    for i in range(0, 5):
+        five_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
+    return five_days_list
 
 
-def parse_forecast_response(forecast_response, six_days_list):
+def parse_forecast_response(forecast_response, five_days_list):
     first_day_temperature = []
     first_day_forecast_weather_count = Counter()
     second_day_temperature = []
@@ -199,40 +227,33 @@ def parse_forecast_response(forecast_response, six_days_list):
     fourth_day_forecast_weather_count = Counter()
     fifth_day_temperature = []
     fifth_day_forecast_weather_count = Counter()
-    sixth_day_temperature = []
-    sixth_day_forecast_weather_count = Counter()
     temperature_and_weather_forecast = []
     for forecast_info in forecast_response["list"]:
-        if forecast_info["dt_txt"][:10] == six_days_list[0]:
+        if forecast_info["dt_txt"][:10] == five_days_list[0]:
             first_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             first_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == six_days_list[1]:
+        elif forecast_info["dt_txt"][:10] == five_days_list[1]:
             second_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             second_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == six_days_list[2]:
+        elif forecast_info["dt_txt"][:10] == five_days_list[2]:
             third_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             third_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == six_days_list[3]:
+        elif forecast_info["dt_txt"][:10] == five_days_list[3]:
             fourth_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             fourth_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == six_days_list[4]:
+        elif forecast_info["dt_txt"][:10] == five_days_list[4]:
             fifth_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             fifth_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == six_days_list[5]:
-            sixth_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
-            )
-            sixth_day_temperature.append(forecast_info["main"]["temp"])
     temperature_and_weather_forecast.append(
         (first_day_temperature, first_day_forecast_weather_count)
     )
@@ -248,9 +269,7 @@ def parse_forecast_response(forecast_response, six_days_list):
     temperature_and_weather_forecast.append(
         (fifth_day_temperature, fifth_day_forecast_weather_count)
     )
-    temperature_and_weather_forecast.append(
-        (sixth_day_temperature, sixth_day_forecast_weather_count)
-    )
+
     return temperature_and_weather_forecast
 
 
@@ -261,30 +280,29 @@ def check_forecast(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
 ):
-    """Get a 6 day temperature and weather forecast of the city"""
+    """Get a 5 day temperature and weather forecast of the city"""
     response = call_api(city)
-    if response is None:
-        console.print(f"No response for city {city}.")
+    if response[API_Response.JSON] is None:
         raise typer.Abort()
 
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
-            lat=response["coord"]["lat"],
-            lon=response["coord"]["lon"],
+            lat=response[API_Response.JSON]["coord"]["lat"],
+            lon=response[API_Response.JSON]["coord"]["lon"],
             API_KEY=API_KEY,
         )
     ).json()
 
-    six_days_list = get_six_days_for_forecast()
+    five_days_list = get_five_days_for_forecast()
     temperature_and_weather_forecast = parse_forecast_response(
-        forecast_response, six_days_list
+        forecast_response, five_days_list
     )
     console.print()
     for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
         temperature_and_weather_forecast
     ):
-        console.print(f"[{six_days_list[day_index]}]")
+        console.print(f"[{five_days_list[day_index]}]")
         if weather_counts_of_the_day.most_common(1)[0] == "Tornado":
             console.print(
                 "[bold red]The city is likely to be hit by a tornado! Please stay safe![/]"
@@ -307,10 +325,6 @@ def check_forecast(
             f"The average temperature will be {average_temperature:.2f}{unit_symbol}."
         )
         console.print()
-    six_days_list.clear()
-    temperature_and_weather_forecast.clear()
-    console.input("[blue]Press enter to continue.[/]")
-    console.print()
     console.rule()
 
 
@@ -358,41 +372,41 @@ def print_compared_temperature(
 
 
 @app.command()
-def compare_weather(
+def check_comparison(
     first_city: str = typer.Argument(..., help="First city to compare with"),
     second_city: str = typer.Argument(..., help="Second city to compare with"),
     unit: UnitType = typer.Argument(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
-    feature: Comparison_Features = typer.Argument(
-        Comparison_Features.ALL, help="Temperature or Weather of the cities"
+    feature: Comparison_Feature = typer.Argument(
+        Comparison_Feature.ALL, help="Temperature or Weather of the cities"
     ),
 ):
     """Compare city's temperature and weather forecast against another city"""
     console.print()
     response = call_api(first_city, compare=True)
-    if response is None:
+    if response[API_Response.JSON] is None:
         console.print("[bold red]The first city name is invalid.[/]")
         raise typer.Abort()
-    first_city_name = first_city.title().strip()
-    first_city_info = get_weather_descriptions(response)
+    first_city_name = response[API_Response.CITY].title().strip()
+    first_city_info = get_weather_descriptions(response[API_Response.JSON])
 
     second_response = call_api(second_city, compare=True)
-    if second_response is None:
+    if second_response[API_Response.JSON] is None:
         console.print("[bold red]The second city name is invalid.[/]")
         raise typer.Abort()
-    second_city_name = second_city.title().strip()
-    second_city_info = get_weather_descriptions(second_response)
+    second_city_name = second_response[API_Response.CITY].title().strip()
+    second_city_info = get_weather_descriptions(second_response[API_Response.JSON])
 
-    if feature == Comparison_Features.WEATHER:
+    if feature == Comparison_Feature.WEATHER:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
-    elif feature == Comparison_Features.TEMPERATURE:
+    elif feature == Comparison_Feature.TEMPERATURE:
         print_compared_temperature(
             first_city_name, first_city_info, second_city_name, second_city_info, unit
         )
-    elif feature == Comparison_Features.ALL:
+    elif feature == Comparison_Feature.ALL:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
@@ -405,11 +419,13 @@ def compare_weather(
     console.rule()
 
 
-def get_all_cities() -> None:
+def get_all_cities() -> list[str]:
     """store all city name into a list"""
+    city_list = []
     with open("cities2.txt", "r", encoding="utf-8") as file:
         for city_name in file:
             city_list.append(city_name.rstrip())
+    return city_list
 
 
 if __name__ == "__main__":
