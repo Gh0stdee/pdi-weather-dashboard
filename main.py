@@ -43,6 +43,11 @@ class API_Response(IntEnum):
     CITY = 1
 
 
+class Connection_Error(StrEnum):
+    BAD_REQUEST = "400"
+    PAGE_NOT_FOUND = "404"
+
+
 console = Console()
 CURRENT_DAY = datetime.now()
 
@@ -99,11 +104,11 @@ def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
 
 
 def fuzzy_search(city: str) -> None | str:
-    new_search = get_close_matches(city, get_all_cities(), n=1)
+    new_search = get_close_matches(city, get_all_cities())
     if len(new_search) < 1:
         return None
     else:
-        return new_search[0]
+        return new_search
 
 
 def call_api(city: str, compare: bool = False):
@@ -114,25 +119,31 @@ def call_api(city: str, compare: bool = False):
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise typer.Abort()
+    return parse_api_response(first_response_json, compare, city)
 
-    if first_response_json["cod"] == "400":
-        if not compare:
-            error_message = (
-                f"[bold red]{first_response_json['message'].capitalize()}[/]"
+
+def handling_api_error_response(first_response_json, compare) -> None:
+    if not compare:
+        error_message = f"[bold red]{first_response_json['message'].capitalize()}[/]"
+        console.print(error_message)
+    return None
+
+
+def parse_api_response(first_response_json, compare, city) -> list:
+    if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
+        return_response_json = handling_api_error_response(first_response_json, compare)
+    elif first_response_json["cod"] == Connection_Error.PAGE_NOT_FOUND:
+        new_city_list = fuzzy_search(city.title().strip())
+        if new_city_list is None:
+            return_response_json = handling_api_error_response(
+                first_response_json, compare
             )
-            console.print(error_message)
-            return_response_json = None
-    elif first_response_json["cod"] == "404":
-        new_city = fuzzy_search(city.title().strip())
-        if new_city is None:
-            if not compare:
-                error_message = (
-                    f"[bold red]{first_response_json['message'].capitalize()}[/]"
-                )
-                console.print(error_message)
-            return_response_json = None
         else:
-            city = new_city
+            if len(new_city_list) != 1:
+                new_city = handling_multi_fuzzy_search_result(new_city_list)
+            else:
+                new_city = new_city_list[0]
+
             return_response_json = requests.get(
                 WEATHER_SERVICE.format(
                     BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
@@ -142,6 +153,24 @@ def call_api(city: str, compare: bool = False):
         return_response_json = first_response_json
 
     return [return_response_json, city]
+
+
+def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
+    for index, city in enumerate(new_city_list, start=1):
+        console.print(f"{index}. {city}")
+    while True:
+        try:
+            new_city = new_city_list[int(console.input("Which city do you mean? ")) - 1]
+        except ValueError:
+            console.print("[bold red]Please input numbers only.[/]")
+            console.print()
+            continue
+        except IndexError:
+            console.print(("[bold red]Please select from the given numbers only.[/]"))
+            console.print()
+            continue
+        break
+    return new_city
 
 
 def get_wind_direction(angle: int) -> str:
@@ -193,7 +222,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
 @app.command()
 def check_weather(
     city: str = typer.Argument(..., help="Name of city to be checked"),
-    unit: UnitType = typer.Argument(
+    unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
 ) -> None:
@@ -216,6 +245,15 @@ def get_five_days_for_forecast():
     return five_days_list
 
 
+class forecast_day:
+    def __init__(self):
+        self.day_temperature = []
+        self.day_forecast_weather_count = Counter()
+
+    def update_forecast_info(self, weather_count: str, temperature: float):
+        self.day_temperature.append()
+
+
 def parse_forecast_response(forecast_response, five_days_list):
     first_day_temperature = []
     first_day_forecast_weather_count = Counter()
@@ -233,6 +271,7 @@ def parse_forecast_response(forecast_response, five_days_list):
             first_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
+            breakpoint()
             first_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:10] == five_days_list[1]:
             second_day_forecast_weather_count.update(
@@ -276,7 +315,7 @@ def parse_forecast_response(forecast_response, five_days_list):
 @app.command()
 def check_forecast(
     city: str = typer.Argument(..., help="Name of the city to be forecasted"),
-    unit: UnitType = typer.Argument(
+    unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
 ):
@@ -375,7 +414,7 @@ def print_compared_temperature(
 def check_comparison(
     first_city: str = typer.Argument(..., help="First city to compare with"),
     second_city: str = typer.Argument(..., help="Second city to compare with"),
-    unit: UnitType = typer.Argument(
+    unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
     feature: Comparison_Feature = typer.Argument(
