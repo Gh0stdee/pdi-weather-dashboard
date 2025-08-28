@@ -1,59 +1,79 @@
+# mappings.py
 from collections import Counter
 from datetime import datetime, timedelta
+
+# mappings.py
 from difflib import get_close_matches
+
+# weather_api.py
 from enum import IntEnum, StrEnum
 
+# weather_api.py
 import requests
 import requests_cache
+
+# weather_api.py
 import typer
+
+# weather_api.py
 from decouple import config
+
+# weather_api.py
 from rich.console import Console
 
+# typer_functions.py
 app = typer.Typer()
 
+# weather_api.py
 API_KEY = config("API_KEY")
 BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = (
     f"{BASE_URL}weather?appid={API_KEY}" + "&q={city_name}&appid={API_KEY}"
 )
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
+
+# weather_api.py
 ONE_DAY = 86400
-FIVE_DAYS = 5
-DATE_INDEX = 10
-INVALID_WIND_DIRECTION = "(Invalid wind direction)"
 requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
 
-
-class Dashboard_Functions(StrEnum):
-    CHECK_WEATHER = "w"
-    CHECK_FORECAST = "f"
-    CHECK_COMPARISON = "c"
+# mappings.py
+INVALID_WIND_DIRECTION = "(Invalid wind direction)"
 
 
+# typer_functions.py
 class UnitType(StrEnum):
     CELSIUS = "c"
     FAHRENHEIT = "f"
 
 
+# typer_functions.py
 class Comparison_Feature(StrEnum):
     ALL = "a"
     WEATHER = "w"
     TEMPERATURE = "t"
 
 
+# weather_api.py
 class API_Response(IntEnum):
     JSON = 0
     CITY = 1
 
 
+# weather_api.py
 class Connection_Error(StrEnum):
     BAD_REQUEST = "400"
     PAGE_NOT_FOUND = "404"
 
 
+# output.py
 console = Console()
-CURRENT_DAY = datetime.now()
 
+# mappings.py
+CURRENT_DAY = datetime.now()
+FIVE_DAYS = 5
+DATE_INDEX = 10
+
+# mappings.py
 WEATHERS = {
     "Clear": "sunny",
     "Clouds": "cloudy",
@@ -72,8 +92,10 @@ WEATHERS = {
     "Tornado": "being hit with a tornado",
 }
 
+# mappings.py
 ORDINARY_WIND_ANGLES: list[int] = [0, 45, 90, 135, 180, 225, 270, 315]
 
+# mappings.py
 ORDINARY_WIND_DIRECTIONS = {
     "N": ORDINARY_WIND_ANGLES[0],
     "NE": ORDINARY_WIND_ANGLES[1],
@@ -85,6 +107,7 @@ ORDINARY_WIND_DIRECTIONS = {
     "NW": ORDINARY_WIND_ANGLES[7],
 }
 
+# mappings.py
 SPECIFIC_WIND_DIRECTIONS: dict = {
     "NNE": (0, 45),
     "ENE": (45, 90),
@@ -97,15 +120,19 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 }
 
 
+# mappings.py
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
     return temperature - 273.15
 
 
+# mappings.py
 def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
     return temperature * 9 / 5 + 32
 
 
+# mappings.py
 def fuzzy_search(city: str) -> None | str:
+    """Return a list of city names that is close to search input"""
     new_search = get_close_matches(city, get_all_cities())
     if len(new_search) < 1:
         return None
@@ -113,7 +140,9 @@ def fuzzy_search(city: str) -> None | str:
         return new_search
 
 
-def call_api(city: str, compare: bool = False):
+# weather_api.py
+def call_api(city: str, compare: bool = False) -> list:
+    """Tries to call the API and return the parsed response"""
     try:
         first_response_json = requests.get(
             WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
@@ -124,14 +153,18 @@ def call_api(city: str, compare: bool = False):
     return parse_api_response(first_response_json, compare, city)
 
 
+# weather_api.py
 def handling_api_error_response(first_response_json, compare) -> None:
+    """Print out error message from response json file"""
     if not compare:
         error_message = f"[bold red]{first_response_json['message'].capitalize()}[/]"
         console.print(error_message)
     return None
 
 
+# weather_api.py
 def parse_api_response(first_response_json, compare, city) -> list:
+    """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
     elif first_response_json["cod"] == Connection_Error.PAGE_NOT_FOUND:
@@ -151,13 +184,16 @@ def parse_api_response(first_response_json, compare, city) -> list:
                     BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
                 )
             ).json()
+            city = new_city
     else:
         return_response_json = first_response_json
 
     return [return_response_json, city]
 
 
+# weather_api.py
 def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
+    """Ask user to choose which city they meant from the fuzzy search"""
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
@@ -175,7 +211,9 @@ def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
     return new_city
 
 
+# mappings.py
 def get_wind_direction(angle: int) -> str:
+    """Return wind direction using the angle response"""
     if angle in ORDINARY_WIND_ANGLES:
         for direction, value in ORDINARY_WIND_DIRECTIONS.items():
             if angle == value:
@@ -187,7 +225,9 @@ def get_wind_direction(angle: int) -> str:
     return INVALID_WIND_DIRECTION
 
 
+# weather_api.py
 def get_weather_descriptions(response) -> dict:
+    """Return a tidy information dictionary from the response"""
     return {
         "weather_status": response["weather"][0]["main"],
         "weather_description": response["weather"][0]["description"].capitalize(),
@@ -198,6 +238,7 @@ def get_weather_descriptions(response) -> dict:
     }
 
 
+# output.py
 def print_weather_descriptions(response, city_name: str, unit_preference: str) -> None:
     """Printing weather descriptions(weather, temperature and humidity)"""
     weather_descriptions = get_weather_descriptions(response)
@@ -205,7 +246,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     console.print(
         f"{city_name.title().strip()} is {WEATHERS[weather_descriptions['weather_status']]} today. ({weather_descriptions['weather_description']})"
     )
-    if unit_preference in ("2", "f"):
+    if unit_preference == "f":
         temperature_fahrenheit = from_celsius_convert_to_fahrenheit(
             float(weather_descriptions["temperature_celsius"])
         )
@@ -221,6 +262,7 @@ def print_weather_descriptions(response, city_name: str, unit_preference: str) -
     )
 
 
+# typer_functions.py
 @app.command()
 def check_weather(
     city: str = typer.Argument(..., help="Name of city to be checked"),
@@ -240,6 +282,7 @@ def check_weather(
     console.rule()
 
 
+# mappings.py
 def get_five_days_for_forecast():
     five_days_list = []
     for i in range(0, FIVE_DAYS):
@@ -256,6 +299,7 @@ class forecast_day:
         self.day_temperature.append()
 
 
+# mappings.py
 def parse_forecast_response(forecast_response, five_days_list):
     first_day_temperature = []
     first_day_forecast_weather_count = Counter()
@@ -313,6 +357,7 @@ def parse_forecast_response(forecast_response, five_days_list):
     return temperature_and_weather_forecast
 
 
+# typer_functions.py
 @app.command()
 def check_forecast(
     city: str = typer.Argument(..., help="Name of the city to be forecasted"),
@@ -368,9 +413,14 @@ def check_forecast(
     console.rule()
 
 
+# output.py
 def print_compared_weather(
-    first_city_name, first_city_info, second_city_name, second_city_info
+    first_city_name: str,
+    first_city_info: dict,
+    second_city_name: str,
+    second_city_info: dict,
 ):
+    """Print out the two cities' weathers"""
     if (
         WEATHERS[first_city_info["weather_status"]]
         == WEATHERS[second_city_info["weather_status"]]
@@ -384,9 +434,15 @@ def print_compared_weather(
         )
 
 
+# output.py
 def print_compared_temperature(
-    first_city_name, first_city_info, second_city_name, second_city_info, unit
+    first_city_name: str,
+    first_city_info: dict,
+    second_city_name: str,
+    second_city_info: dict,
+    unit: UnitType,
 ):
+    """Print out the tow cities' temperatures"""
     first_city_temp = first_city_info["temperature_celsius"]
     second_city_temp = second_city_info["temperature_celsius"]
     difference = first_city_temp - second_city_temp
@@ -411,6 +467,7 @@ def print_compared_temperature(
         )
 
 
+# typer_functions.py
 @app.command()
 def check_comparison(
     first_city: str = typer.Argument(..., help="First city to compare with"),
@@ -459,6 +516,7 @@ def check_comparison(
     console.rule()
 
 
+# mappings.py
 def get_all_cities() -> list[str]:
     """store all city name into a list"""
     city_list = []

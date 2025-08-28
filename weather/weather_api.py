@@ -1,17 +1,20 @@
 from enum import IntEnum, StrEnum
 
 import requests
+import requests_cache
 from decouple import config
-from rich.console import Console
 from typer import Abort
 
 from .mappings import fuzzy_search
+from .output import console
 
 BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = "{BASE_URL}weather?q={city_name}&appid={API_KEY}"
 FORECAST_SERVICE = "{BASE_URL}forecast?lat={lat}&lon={lon}&appid={API_KEY}"
 API_KEY = config("API_KEY")
-console = Console()
+
+ONE_DAY = 86400
+requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
 
 
 class Connection_Error(StrEnum):
@@ -24,7 +27,8 @@ class API_Response(IntEnum):
     CITY = 1
 
 
-def call_api(city: str, compare: bool = False):
+def call_api(city: str, compare: bool = False) -> list:
+    """Tries to call the API and return the parsed response"""
     try:
         first_response_json = requests.get(
             WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
@@ -36,6 +40,7 @@ def call_api(city: str, compare: bool = False):
 
 
 def handling_api_error_response(first_response_json, compare) -> None:
+    """Print out error message from response json file"""
     if not compare:
         error_message = f"[bold red]{first_response_json['message'].capitalize()}[/]"
         console.print(error_message)
@@ -43,6 +48,7 @@ def handling_api_error_response(first_response_json, compare) -> None:
 
 
 def parse_api_response(first_response_json, compare, city) -> list:
+    """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
     elif first_response_json["cod"] == Connection_Error.PAGE_NOT_FOUND:
@@ -62,6 +68,7 @@ def parse_api_response(first_response_json, compare, city) -> list:
                     BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
                 )
             ).json()
+            city = new_city
     else:
         return_response_json = first_response_json
 
@@ -69,6 +76,7 @@ def parse_api_response(first_response_json, compare, city) -> list:
 
 
 def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
+    """Ask user to choose which city they meant from the fuzzy search"""
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
