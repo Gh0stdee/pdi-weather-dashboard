@@ -417,7 +417,7 @@ def check_comparison(
     unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
-    feature: Comparison_Feature = typer.Argument(
+    feature: Comparison_Feature = typer.Option(
         Comparison_Feature.ALL, help="Temperature or Weather of the cities"
     ),
 ):
