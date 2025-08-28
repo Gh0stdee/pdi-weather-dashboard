@@ -121,6 +121,19 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 
 
 # mappings.py
+class forecast_day:
+    def __init__(self):
+        self.temperatures = []
+        self.forecast_weather_counter = Counter()
+        self.entry_numbers = 0
+
+    def update_forecast_info(self, weather_count: list[str], temperature: float):
+        self.temperatures.append(temperature)
+        self.forecast_weather_counter.update(weather_count)
+        self.entry_numbers += 1
+
+
+# mappings.py
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
     return temperature - 273.15
 
@@ -131,7 +144,7 @@ def from_celsius_convert_to_fahrenheit(temperature: float) -> float:
 
 
 # mappings.py
-def fuzzy_search(city: str) -> None | str:
+def fuzzy_search(city: str) -> list[str]:
     """Return a list of city names that is close to search input"""
     new_search = get_close_matches(city, get_all_cities())
     if len(new_search) < 1:
@@ -151,6 +164,23 @@ def call_api(city: str, compare: bool = False) -> list:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise typer.Abort()
     return parse_api_response(first_response_json, compare, city)
+
+
+def call_forecast_api(city: str):
+    """Tries to call the Forecast API and return the received response"""
+    response = call_api(city)
+    if response[API_Response.JSON] is None:
+        raise typer.Abort()
+
+    forecast_response = requests.get(
+        FORECAST_SERVICE.format(
+            BASE_URL=BASE_URL,
+            lat=response[API_Response.JSON]["coord"]["lat"],
+            lon=response[API_Response.JSON]["coord"]["lon"],
+            API_KEY=API_KEY,
+        )
+    ).json()
+    return forecast_response
 
 
 # weather_api.py
@@ -290,71 +320,36 @@ def get_five_days_for_forecast():
     return five_days_list
 
 
-class forecast_day:
-    def __init__(self):
-        self.day_temperature = []
-        self.day_forecast_weather_count = Counter()
-
-    def update_forecast_info(self, weather_count: str, temperature: float):
-        self.day_temperature.append()
-
-
 # mappings.py
-def parse_forecast_response(forecast_response, five_days_list):
-    first_day_temperature = []
-    first_day_forecast_weather_count = Counter()
-    second_day_temperature = []
-    second_day_forecast_weather_count = Counter()
-    third_day_temperature = []
-    third_day_forecast_weather_count = Counter()
-    fourth_day_temperature = []
-    fourth_day_forecast_weather_count = Counter()
-    fifth_day_temperature = []
-    fifth_day_forecast_weather_count = Counter()
-    temperature_and_weather_forecast = []
+def parse_forecast_response(forecast_response, five_days_list) -> list[forecast_day]:
+    """Separate the response into five days"""
+    first_day = forecast_day()
+    second_day = forecast_day()
+    third_day = forecast_day()
+    fourth_day = forecast_day()
+    fifth_day = forecast_day()
     for forecast_info in forecast_response["list"]:
         if forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[0]:
-            first_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            first_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            first_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[1]:
-            second_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            second_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            second_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[2]:
-            third_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            third_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            third_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[3]:
-            fourth_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            fourth_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            fourth_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[4]:
-            fifth_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            fifth_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            fifth_day_temperature.append(forecast_info["main"]["temp"])
-    temperature_and_weather_forecast.append(
-        (first_day_temperature, first_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (second_day_temperature, second_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (third_day_temperature, third_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (fourth_day_temperature, fourth_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (fifth_day_temperature, fifth_day_forecast_weather_count)
-    )
-
-    return temperature_and_weather_forecast
+    return [first_day, second_day, third_day, fourth_day, fifth_day]
 
 
 # typer_functions.py
@@ -370,34 +365,22 @@ def check_forecast(
     if response[API_Response.JSON] is None:
         raise typer.Abort()
 
-    forecast_response = requests.get(
-        FORECAST_SERVICE.format(
-            BASE_URL=BASE_URL,
-            lat=response[API_Response.JSON]["coord"]["lat"],
-            lon=response[API_Response.JSON]["coord"]["lon"],
-            API_KEY=API_KEY,
-        )
-    ).json()
-
+    forecast_response = call_forecast_api(city)
     five_days_list = get_five_days_for_forecast()
-    temperature_and_weather_forecast = parse_forecast_response(
-        forecast_response, five_days_list
-    )
+    forecast_days = parse_forecast_response(forecast_response, five_days_list)
     console.print()
-    for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
-        temperature_and_weather_forecast
-    ):
+    for day_index, forecast_day in enumerate(forecast_days):
         console.print(f"[{five_days_list[day_index]}]")
-        if weather_counts_of_the_day.most_common(1)[0] == "Tornado":
+        if forecast_day.forecast_weather_counter.most_common(1)[0] == "Tornado":
             console.print(
                 "[bold red]The city is likely to be hit by a tornado! Please stay safe![/]"
             )
         else:
             console.print(
-                f"The weather on this day is mostly {WEATHERS[weather_counts_of_the_day.most_common(1)[0][0]]}."
+                f"The weather on this day is mostly {WEATHERS[forecast_day.forecast_weather_counter.most_common(1)[0][0]]}."
             )
         average_temperature = from_kelvin_convert_to_celsius(
-            sum(temperatures_of_the_day) / len(temperatures_of_the_day)
+            sum(forecast_day.temperatures) / forecast_day.entry_numbers
         )
         if unit == UnitType.FAHRENHEIT:
             unit_symbol = "°F"

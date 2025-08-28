@@ -1,4 +1,3 @@
-import requests
 import typer
 
 from .mappings import (
@@ -17,7 +16,7 @@ from .output import (
     print_compared_weather,
     print_weather_descriptions,
 )
-from .weather_api import API_KEY, BASE_URL, FORECAST_SERVICE, API_Response, call_api
+from .weather_api import API_Response, call_api, call_forecast_api
 
 app = typer.Typer()
 
@@ -101,15 +100,7 @@ def check_forecast(
     if response[API_Response.JSON] is None:
         raise typer.Abort()
 
-    forecast_response = requests.get(
-        FORECAST_SERVICE.format(
-            BASE_URL=BASE_URL,
-            lat=response[API_Response.JSON]["coord"]["lat"],
-            lon=response[API_Response.JSON]["coord"]["lon"],
-            API_KEY=API_KEY,
-        )
-    ).json()
-
+    forecast_response = call_forecast_api(city)
     five_days_list = get_five_days_for_forecast()
     temperature_and_weather_forecast = parse_forecast_response(
         forecast_response, five_days_list

@@ -62,6 +62,18 @@ class Comparison_Feature(StrEnum):
     TEMPERATURE = "t"
 
 
+class forecast_day:
+    def __init__(self):
+        self.temperatures = []
+        self.forecast_weather_counter = Counter()
+        self.entry_numbers = 0
+
+    def update_forecast_info(self, weather_count: list[str], temperature: float):
+        self.temperatures.append(temperature)
+        self.forecast_weather_counter.update(weather_count)
+        self.entry_numbers += 1
+
+
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
     return temperature - 273.15
 
@@ -104,7 +116,7 @@ def get_all_cities() -> list[str]:
     return city_list
 
 
-def fuzzy_search(city: str) -> None | str:
+def fuzzy_search(city: str) -> list[str]:
     """Return a list of city names that is close to search input"""
     new_search = get_close_matches(city, get_all_cities())
     if len(new_search) < 1:
@@ -120,58 +132,32 @@ def get_five_days_for_forecast():
     return five_days_list
 
 
-def parse_forecast_response(forecast_response, five_days_list):
-    first_day_temperature = []
-    first_day_forecast_weather_count = Counter()
-    second_day_temperature = []
-    second_day_forecast_weather_count = Counter()
-    third_day_temperature = []
-    third_day_forecast_weather_count = Counter()
-    fourth_day_temperature = []
-    fourth_day_forecast_weather_count = Counter()
-    fifth_day_temperature = []
-    fifth_day_forecast_weather_count = Counter()
-    temperature_and_weather_forecast = []
+def parse_forecast_response(forecast_response, five_days_list) -> list[forecast_day]:
+    """Separate the response into five days"""
+    first_day = forecast_day()
+    second_day = forecast_day()
+    third_day = forecast_day()
+    fourth_day = forecast_day()
+    fifth_day = forecast_day()
     for forecast_info in forecast_response["list"]:
         if forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[0]:
-            first_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            first_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            first_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[1]:
-            second_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            second_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            second_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[2]:
-            third_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            third_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            third_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[3]:
-            fourth_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            fourth_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            fourth_day_temperature.append(forecast_info["main"]["temp"])
         elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[4]:
-            fifth_day_forecast_weather_count.update(
-                [forecast_info["weather"][0]["main"]]
+            fifth_day.update_forecast_info(
+                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
             )
-            fifth_day_temperature.append(forecast_info["main"]["temp"])
-    temperature_and_weather_forecast.append(
-        (first_day_temperature, first_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (second_day_temperature, second_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (third_day_temperature, third_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (fourth_day_temperature, fourth_day_forecast_weather_count)
-    )
-    temperature_and_weather_forecast.append(
-        (fifth_day_temperature, fifth_day_forecast_weather_count)
-    )
-
-    return temperature_and_weather_forecast
+    return [first_day, second_day, third_day, fourth_day, fifth_day]

@@ -39,6 +39,23 @@ def call_api(city: str, compare: bool = False) -> list:
     return parse_api_response(first_response_json, compare, city)
 
 
+def call_forecast_api(city: str):
+    """Tries to call the Forecast API and return the received response"""
+    response = call_api(city)
+    if response[API_Response.JSON] is None:
+        raise Abort()
+
+    forecast_response = requests.get(
+        FORECAST_SERVICE.format(
+            BASE_URL=BASE_URL,
+            lat=response[API_Response.JSON]["coord"]["lat"],
+            lon=response[API_Response.JSON]["coord"]["lon"],
+            API_KEY=API_KEY,
+        )
+    ).json()
+    return forecast_response
+
+
 def handling_api_error_response(first_response_json, compare) -> None:
     """Print out error message from response json file"""
     if not compare:
