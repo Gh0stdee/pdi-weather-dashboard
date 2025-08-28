@@ -18,6 +18,9 @@ WEATHER_SERVICE = (
 )
 FORECAST_SERVICE = f"{BASE_URL}forecast?appid={API_KEY}" + "&lat={lat}&lon={lon}"
 ONE_DAY = 86400
+FIVE_DAYS = 5
+DATE_INDEX = 10
+INVALID_WIND_DIRECTION = "(Invalid wind direction)"
 requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
 
 
@@ -92,7 +95,6 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
     "WNW": (270, 315),
     "NNW": (315, 360),
 }
-COMPARISON_LIST: list[str] = ["Weather [blue](w)[/]", "Temperature [blue](t)[/]"]
 
 
 def from_kelvin_convert_to_celsius(temperature: float) -> float:
@@ -182,7 +184,7 @@ def get_wind_direction(angle: int) -> str:
         for direction, (min, max) in SPECIFIC_WIND_DIRECTIONS.items():
             if min < angle < max:
                 return direction + f" ({angle}°)"
-    return "(Invalid wind direction)"
+    return INVALID_WIND_DIRECTION
 
 
 def get_weather_descriptions(response) -> dict:
@@ -240,8 +242,8 @@ def check_weather(
 
 def get_five_days_for_forecast():
     five_days_list = []
-    for i in range(0, 5):
-        five_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:10])
+    for i in range(0, FIVE_DAYS):
+        five_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:DATE_INDEX])
     return five_days_list
 
 
@@ -267,28 +269,27 @@ def parse_forecast_response(forecast_response, five_days_list):
     fifth_day_forecast_weather_count = Counter()
     temperature_and_weather_forecast = []
     for forecast_info in forecast_response["list"]:
-        if forecast_info["dt_txt"][:10] == five_days_list[0]:
+        if forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[0]:
             first_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
-            breakpoint()
             first_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == five_days_list[1]:
+        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[1]:
             second_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             second_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == five_days_list[2]:
+        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[2]:
             third_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             third_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == five_days_list[3]:
+        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[3]:
             fourth_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
             fourth_day_temperature.append(forecast_info["main"]["temp"])
-        elif forecast_info["dt_txt"][:10] == five_days_list[4]:
+        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[4]:
             fifth_day_forecast_weather_count.update(
                 [forecast_info["weather"][0]["main"]]
             )
