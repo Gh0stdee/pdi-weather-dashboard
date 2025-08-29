@@ -42,7 +42,10 @@ def call_api(city: str, compare: bool = False) -> list:
 def call_forecast_api(city: str):
     """Tries to call the Forecast API and return the received response"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise Abort()
 
     forecast_response = requests.get(
@@ -94,6 +97,7 @@ def parse_api_response(first_response_json, compare, city) -> list:
 
 def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
     """Ask user to choose which city they meant from the fuzzy search"""
+    new_city_list.append("[red]None of the above[/]")
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
@@ -102,10 +106,10 @@ def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
         except ValueError:
             console.print("[bold red]Please input numbers only.[/]")
             console.print()
-            continue
+            raise
         except IndexError:
             console.print(("[bold red]Please select from the given numbers only.[/]"))
             console.print()
-            continue
+            raise
         break
     return new_city

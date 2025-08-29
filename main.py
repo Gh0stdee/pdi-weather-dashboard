@@ -121,7 +121,7 @@ SPECIFIC_WIND_DIRECTIONS: dict = {
 
 
 # mappings.py
-class forecast_day:
+class ForecastDays:
     def __init__(self):
         self.temperatures = []
         self.forecast_weather_counter = Counter()
@@ -163,13 +163,21 @@ def call_api(city: str, compare: bool = False) -> list:
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise typer.Abort()
+    except requests.ConnectionError:
+        console.print(
+            "[bold red]Unable to connect. Please check your Internet connection.[/]"
+        )
+        raise typer.Abort()
     return parse_api_response(first_response_json, compare, city)
 
 
 def call_forecast_api(city: str):
     """Tries to call the Forecast API and return the received response"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise typer.Abort()
 
     forecast_response = requests.get(
@@ -224,11 +232,15 @@ def parse_api_response(first_response_json, compare, city) -> list:
 # weather_api.py
 def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
     """Ask user to choose which city they meant from the fuzzy search"""
+    new_city_list.append("[red]None of the above[/]")
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
         try:
-            new_city = new_city_list[int(console.input("Which city do you mean? ")) - 1]
+            console.print()
+            new_city = new_city_list[
+                int(console.input("Which city did you mean to input? ")) - 1
+            ]
         except ValueError:
             console.print("[bold red]Please input numbers only.[/]")
             console.print()
@@ -302,9 +314,11 @@ def check_weather(
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise typer.Abort()
-
     print_weather_descriptions(
         response[API_Response.JSON], response[API_Response.CITY], unit
     )
@@ -321,35 +335,16 @@ def get_five_days_for_forecast():
 
 
 # mappings.py
-def parse_forecast_response(forecast_response, five_days_list) -> list[forecast_day]:
+def parse_forecast_response(forecast_response, five_days_list) -> list[ForecastDays]:
     """Separate the response into five days"""
-    first_day = forecast_day()
-    second_day = forecast_day()
-    third_day = forecast_day()
-    fourth_day = forecast_day()
-    fifth_day = forecast_day()
+    days = [ForecastDays() for _ in range(FIVE_DAYS)]
     for forecast_info in forecast_response["list"]:
-        if forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[0]:
-            first_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[1]:
-            second_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[2]:
-            third_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[3]:
-            fourth_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[4]:
-            fifth_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-    return [first_day, second_day, third_day, fourth_day, fifth_day]
+        for i, day in enumerate(five_days_list):
+            if forecast_info["dt_txt"][:DATE_INDEX] == day:
+                days[i].update_forecast_info(
+                    [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
+                )
+    return days
 
 
 # typer_functions.py
@@ -362,7 +357,10 @@ def check_forecast(
 ):
     """Get a 5 day temperature and weather forecast of the city"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise typer.Abort()
 
     forecast_response = call_forecast_api(city)
@@ -465,6 +463,8 @@ def check_comparison(
     """Compare city's temperature and weather forecast against another city"""
     console.print()
     response = call_api(first_city, compare=True)
+    if response[API_Response.CITY] == "[red]None of the above[/]":
+        raise typer.Abort()
     if response[API_Response.JSON] is None:
         console.print("[bold red]The first city name is invalid.[/]")
         raise typer.Abort()
@@ -472,6 +472,8 @@ def check_comparison(
     first_city_info = get_weather_descriptions(response[API_Response.JSON])
 
     second_response = call_api(second_city, compare=True)
+    if second_response[API_Response.CITY] == "[red]None of the above[/]":
+        raise typer.Abort()
     if second_response[API_Response.JSON] is None:
         console.print("[bold red]The second city name is invalid.[/]")
         raise typer.Abort()

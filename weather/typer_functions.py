@@ -30,7 +30,10 @@ def check_weather(
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise typer.Abort()
 
     print_weather_descriptions(
@@ -54,6 +57,8 @@ def check_comparison(
     """Compare city's temperature and weather forecast against another city"""
     console.print()
     response = call_api(first_city, compare=True)
+    if response[API_Response.CITY] == "[red]None of the above[/]":
+        raise typer.Abort()
     if response[API_Response.JSON] is None:
         console.print("[bold red]The first city name is invalid.[/]")
         raise typer.Abort()
@@ -61,6 +66,8 @@ def check_comparison(
     first_city_info = get_weather_descriptions(response[API_Response.JSON])
 
     second_response = call_api(second_city, compare=True)
+    if second_response[API_Response.CITY] == "[red]None of the above[/]":
+        raise typer.Abort()
     if second_response[API_Response.JSON] is None:
         console.print("[bold red]The second city name is invalid.[/]")
         raise typer.Abort()
@@ -97,7 +104,10 @@ def check_forecast(
 ):
     """Get a 5 day temperature and weather forecast of the city"""
     response = call_api(city)
-    if response[API_Response.JSON] is None:
+    if (
+        response[API_Response.JSON] is None
+        or response[API_Response.CITY] == "[red]None of the above[/]"
+    ):
         raise typer.Abort()
 
     forecast_response = call_forecast_api(city)
