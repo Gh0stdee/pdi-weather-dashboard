@@ -13,6 +13,9 @@ BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = "{BASE_URL}weather?q={city_name}&appid={API_KEY}"
 FORECAST_SERVICE = "{BASE_URL}forecast?lat={lat}&lon={lon}&appid={API_KEY}"
 API_KEY = config("API_KEY")
+# TODO: see if we can break out rich which is related to formattting, not data
+# processing
+NONE_OPTION = "[red]None of the above[/]"
 
 ONE_DAY = 86400
 requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
@@ -23,12 +26,12 @@ class Connection_Error(StrEnum):
     PAGE_NOT_FOUND = "404"
 
 
-class api_response(NamedTuple):
-    json: dict
+class ApiResponse(NamedTuple):
+    json: dict | None
     city: str
 
 
-def call_api(city: str, compare: bool = False) -> api_response:
+def call_api(city: str, compare: bool = False) -> ApiResponse:
     """Tries to call the API and return the parsed response"""
     try:
         first_response_json = requests.get(
@@ -40,10 +43,10 @@ def call_api(city: str, compare: bool = False) -> api_response:
     return parse_api_response(first_response_json, compare, city)
 
 
-def call_forecast_api(city: str) -> api_response:
+def call_forecast_api(city: str) -> ApiResponse:
     """Tries to call the Forecast API and return the received response"""
     response = call_api(city)
-    if response.json is None or response.city == "[red]None of the above[/]":
+    if response.json is None or response.city == NONE_OPTION:
         raise Abort()
 
     forecast_response = requests.get(
@@ -54,7 +57,7 @@ def call_forecast_api(city: str) -> api_response:
             API_KEY=API_KEY,
         )
     )
-    return api_response(json=forecast_response.json(), city=response.city)
+    return ApiResponse(json=forecast_response.json(), city=response.city)
 
 
 def handling_api_error_response(first_response_json, compare) -> None:
@@ -65,13 +68,13 @@ def handling_api_error_response(first_response_json, compare) -> None:
     return None
 
 
-def parse_api_response(first_response_json, compare, city) -> api_response:
+def parse_api_response(first_response_json, compare, city) -> ApiResponse:
     """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
     elif first_response_json["cod"] == Connection_Error.PAGE_NOT_FOUND:
         new_city_list = fuzzy_search(city.title().strip())
-        if new_city_list is None:
+        if not new_city_list:  # [] is falsy
             return_response_json = handling_api_error_response(
                 first_response_json, compare
             )
@@ -88,12 +91,12 @@ def parse_api_response(first_response_json, compare, city) -> api_response:
             city = new_city
     else:
         return_response_json = first_response_json
-    return api_response(json=return_response_json, city=city)
+    return ApiResponse(json=return_response_json, city=city)
 
 
 def handling_multi_fuzzy_search_result(new_city_list: list[str], test: bool) -> str:
     """Ask user to choose which city they meant from the fuzzy search"""
-    new_city_list.append("[red]None of the above[/]")
+    new_city_list.append(NONE_OPTION)
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
