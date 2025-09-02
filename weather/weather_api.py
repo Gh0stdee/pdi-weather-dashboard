@@ -1,4 +1,5 @@
-from enum import IntEnum, StrEnum
+from enum import StrEnum
+from typing import NamedTuple
 
 import requests
 import requests_cache
@@ -22,12 +23,12 @@ class Connection_Error(StrEnum):
     PAGE_NOT_FOUND = "404"
 
 
-class API_Response(IntEnum):
-    JSON = 0
-    CITY = 1
+class api_response(NamedTuple):
+    json: dict
+    city: str
 
 
-def call_api(city: str, compare: bool = False) -> list:
+def call_api(city: str, compare: bool = False) -> api_response:
     """Tries to call the API and return the parsed response"""
     try:
         first_response_json = requests.get(
@@ -39,24 +40,21 @@ def call_api(city: str, compare: bool = False) -> list:
     return parse_api_response(first_response_json, compare, city)
 
 
-def call_forecast_api(city: str):
+def call_forecast_api(city: str) -> api_response:
     """Tries to call the Forecast API and return the received response"""
     response = call_api(city)
-    if (
-        response[API_Response.JSON] is None
-        or response[API_Response.CITY] == "[red]None of the above[/]"
-    ):
+    if response.json is None or response.city == "[red]None of the above[/]":
         raise Abort()
 
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
-            lat=response[API_Response.JSON]["coord"]["lat"],
-            lon=response[API_Response.JSON]["coord"]["lon"],
+            lat=response.json["coord"]["lat"],
+            lon=response.json["coord"]["lon"],
             API_KEY=API_KEY,
         )
-    ).json()
-    return forecast_response
+    )
+    return api_response(json=forecast_response.json(), city=response.city)
 
 
 def handling_api_error_response(first_response_json, compare) -> None:
@@ -67,7 +65,7 @@ def handling_api_error_response(first_response_json, compare) -> None:
     return None
 
 
-def parse_api_response(first_response_json, compare, city) -> list:
+def parse_api_response(first_response_json, compare, city) -> api_response:
     """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
@@ -79,10 +77,9 @@ def parse_api_response(first_response_json, compare, city) -> list:
             )
         else:
             if len(new_city_list) != 1:
-                new_city = handling_multi_fuzzy_search_result(new_city_list)
+                new_city = handling_multi_fuzzy_search_result(new_city_list, False)
             else:
                 new_city = new_city_list[0]
-
             return_response_json = requests.get(
                 WEATHER_SERVICE.format(
                     BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
@@ -91,25 +88,38 @@ def parse_api_response(first_response_json, compare, city) -> list:
             city = new_city
     else:
         return_response_json = first_response_json
+    return api_response(json=return_response_json, city=city)
 
-    return [return_response_json, city]
 
-
-def handling_multi_fuzzy_search_result(new_city_list: list[str]) -> str:
+def handling_multi_fuzzy_search_result(new_city_list: list[str], test: bool) -> str:
     """Ask user to choose which city they meant from the fuzzy search"""
     new_city_list.append("[red]None of the above[/]")
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:
         try:
-            new_city = new_city_list[int(console.input("Which city do you mean? ")) - 1]
+            positive_numbered_index = int(console.input("Which city do you mean? ")) - 1
+            if positive_numbered_index < 0:
+                console.print(
+                    ("[bold red]Please select from the given numbers only.[/]")
+                )
+                console.print()
+                continue
+            else:
+                new_city = new_city_list[positive_numbered_index]
         except ValueError:
             console.print("[bold red]Please input numbers only.[/]")
             console.print()
-            raise
+            if test:
+                raise
+            else:
+                continue
         except IndexError:
             console.print(("[bold red]Please select from the given numbers only.[/]"))
             console.print()
-            raise
+            if test:
+                raise
+            else:
+                continue
         break
     return new_city
