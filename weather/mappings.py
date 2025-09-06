@@ -116,7 +116,7 @@ def get_all_cities() -> list[str]:
     return city_list
 
 
-def fuzzy_search(city: str) -> list[str]:
+def fuzzy_search(city: str) -> list[str] | None:
     """Return a list of city names that is close to search input"""
     new_search = get_close_matches(city, get_all_cities())
     if len(new_search) < 1:
@@ -125,7 +125,7 @@ def fuzzy_search(city: str) -> list[str]:
         return new_search
 
 
-def get_five_days_for_forecast():
+def get_five_days_for_forecast() -> list[str]:
     five_days_list = []
     for i in range(0, FIVE_DAYS):
         five_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:DATE_INDEX])

@@ -28,8 +28,8 @@ class api_response(NamedTuple):
     city: str
 
 
-def call_api(city: str, compare: bool = False) -> api_response:
-    """Tries to call the API and return the parsed response"""
+def call_api(city: str) -> dict:
+    """Tries to call the API and return response in json format"""
     try:
         first_response_json = requests.get(
             WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
@@ -37,15 +37,21 @@ def call_api(city: str, compare: bool = False) -> api_response:
     except requests.exceptions.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise Abort()
-    return parse_api_response(first_response_json, compare, city)
+    return first_response_json
 
 
 def call_forecast_api(city: str) -> api_response:
     """Tries to call the Forecast API and return the received response"""
-    response = call_api(city)
+    response = parse_api_response(
+        first_response_json=call_api(city), compare=False, city=city
+    )  # Call normal API to get latitude and longitude
     if response.json is None or response.city == "[red]None of the above[/]":
         raise Abort()
 
+    """
+    Response's info have been verified above, no need to parse again
+    Return the api_response directly after calling forecast API
+    """
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
@@ -57,7 +63,7 @@ def call_forecast_api(city: str) -> api_response:
     return api_response(json=forecast_response.json(), city=response.city)
 
 
-def handling_api_error_response(first_response_json, compare) -> None:
+def handling_api_error_response(first_response_json: dict, compare: bool):
     """Print out error message from response json file"""
     if not compare:
         error_message = f"[bold red]{first_response_json['message'].capitalize()}[/]"
@@ -65,7 +71,9 @@ def handling_api_error_response(first_response_json, compare) -> None:
     return None
 
 
-def parse_api_response(first_response_json, compare, city) -> api_response:
+def parse_api_response(
+    first_response_json: dict, compare: bool, city: str
+) -> api_response:
     """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
