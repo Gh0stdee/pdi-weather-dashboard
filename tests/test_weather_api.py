@@ -1,7 +1,7 @@
 import pytest
 
 from weather.weather_api import (
-    api_response,
+    ApiResponse,
     call_api,
     call_forecast_api,
     handling_multi_fuzzy_search_result,
@@ -50,6 +50,6 @@ def test_call_forecast_api(mocker):
         "coord": {"lon": 121, "lat": 24},
     }
     result = call_forecast_api("taiwan")
-    assert result == api_response(
+    assert result == ApiResponse(
         {"cod": 200, "coord": {"lon": 121, "lat": 24}}, "taiwan"
     )

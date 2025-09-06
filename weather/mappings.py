@@ -118,11 +118,7 @@ def get_all_cities() -> list[str]:
 
 def fuzzy_search(city: str) -> list[str] | None:
     """Return a list of city names that is close to search input"""
-    new_search = get_close_matches(city, get_all_cities())
-    if len(new_search) < 1:
-        return None
-    else:
-        return new_search
+    return get_close_matches(city, get_all_cities())
 
 
 def get_five_days_for_forecast() -> list[str]:
