@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import requests
 import requests_cache
-from decouple import config
+from decouple import config  # type: ignore
 from typer import Abort
 
 from .mappings import fuzzy_search
@@ -36,7 +36,7 @@ def call_api(city: str) -> dict:
         first_response_json = requests.get(
             WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
         ).json()
-    except requests.exceptions.ConnectTimeout:
+    except requests.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise Abort()
     return first_response_json
