@@ -9,6 +9,18 @@ Fuzzy search is supported for misspelled city name
 
 ## Setup
 
+```
+$ git clone git@github.com:Gh0stdee/pdi-weather-dashboard.git
+$ cd pdi-weather-dashboard
+$ uv sync --all-extras
+# set api key
+$ cp .env-template .env
+# run the app
+$ uv run main.py --help
+# run the tests
+$ uv run pytest
+```
+
 ## Usage
 
 ### Current Weather
