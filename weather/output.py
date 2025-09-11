@@ -11,7 +11,9 @@ from .mappings import (
 console = Console()
 
 
-def print_weather_descriptions(response, city_name: str, unit_preference: str) -> None:
+def print_weather_descriptions(
+    response: dict, city_name: str, unit_preference: str
+) -> None:
     """Printing weather descriptions(weather, temperature and humidity)"""
     weather_descriptions = get_weather_descriptions(response)
     console.print()
