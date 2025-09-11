@@ -21,6 +21,6 @@ dev = [
     "types-requests>=2.32.4.20250809",
 ]
 
-[tool.mypy]
-strict = false
+[[tool.mypy.overrides]]
+module = ["decouple", "decouple.*"]
 ignore_missing_imports = true
