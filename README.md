@@ -19,6 +19,9 @@ $ cp .env-template .env
 $ uv run main.py --help
 # run the tests
 $ uv run pytest
+# check type hints
+$ uv run ty check .
+$ uv run mypy .
 ```
 
 ## Usage
