@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import requests
 import requests_cache
-from decouple import config
+from decouple import config  # type: ignore
 from typer import Abort
 
 from .mappings import fuzzy_search
@@ -13,6 +13,8 @@ BASE_URL = "https://api.openweathermap.org/data/2.5/"
 WEATHER_SERVICE = "{BASE_URL}weather?q={city_name}&appid={API_KEY}"
 FORECAST_SERVICE = "{BASE_URL}forecast?lat={lat}&lon={lon}&appid={API_KEY}"
 API_KEY = config("API_KEY")
+NONE_OPTION = "[red]None of the above[/]"
+# TODO: see if we can break out rich which is related to formattting, not data
 
 ONE_DAY = 86400
 requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
@@ -23,29 +25,35 @@ class Connection_Error(StrEnum):
     PAGE_NOT_FOUND = "404"
 
 
-class api_response(NamedTuple):
-    json: dict
+class ApiResponse(NamedTuple):
+    json: dict | None
     city: str
 
 
-def call_api(city: str, compare: bool = False) -> api_response:
-    """Tries to call the API and return the parsed response"""
+def call_api(city: str) -> dict:
+    """Tries to call the API and return response in json format"""
     try:
         first_response_json = requests.get(
             WEATHER_SERVICE.format(BASE_URL=BASE_URL, city_name=city, API_KEY=API_KEY)
         ).json()
-    except requests.exceptions.ConnectTimeout:
+    except requests.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
         raise Abort()
-    return parse_api_response(first_response_json, compare, city)
+    return first_response_json
 
 
-def call_forecast_api(city: str) -> api_response:
+def call_forecast_api(city: str) -> ApiResponse:
     """Tries to call the Forecast API and return the received response"""
-    response = call_api(city)
-    if response.json is None or response.city == "[red]None of the above[/]":
+    response = parse_api_response(
+        first_response_json=call_api(city), compare=False, city=city
+    )  # Call normal API to get latitude and longitude
+    if response.json is None or response.city == NONE_OPTION:
         raise Abort()
 
+    """
+    Response's info have been verified above, no need to parse again
+    Return the ApiResponse directly after calling forecast API
+    """
     forecast_response = requests.get(
         FORECAST_SERVICE.format(
             BASE_URL=BASE_URL,
@@ -54,10 +62,10 @@ def call_forecast_api(city: str) -> api_response:
             API_KEY=API_KEY,
         )
     )
-    return api_response(json=forecast_response.json(), city=response.city)
+    return ApiResponse(json=forecast_response.json(), city=response.city)
 
 
-def handling_api_error_response(first_response_json, compare) -> None:
+def handling_api_error_response(first_response_json: dict, compare: bool):
     """Print out error message from response json file"""
     if not compare:
         error_message = f"[bold red]{first_response_json['message'].capitalize()}[/]"
@@ -65,21 +73,23 @@ def handling_api_error_response(first_response_json, compare) -> None:
     return None
 
 
-def parse_api_response(first_response_json, compare, city) -> api_response:
+def parse_api_response(
+    first_response_json: dict, compare: bool, city: str
+) -> ApiResponse:
     """Check if the api response and city name is valid"""
     if first_response_json["cod"] == Connection_Error.BAD_REQUEST:
         return_response_json = handling_api_error_response(first_response_json, compare)
     elif first_response_json["cod"] == Connection_Error.PAGE_NOT_FOUND:
-        new_city_list = fuzzy_search(city.title().strip())
-        if new_city_list is None:
+        search_list = fuzzy_search(city.title().strip())
+        if not search_list:
             return_response_json = handling_api_error_response(
                 first_response_json, compare
             )
         else:
-            if len(new_city_list) != 1:
-                new_city = handling_multi_fuzzy_search_result(new_city_list, False)
+            if len(search_list) != 1:
+                new_city = handling_multi_fuzzy_search_result(search_list, False)
             else:
-                new_city = new_city_list[0]
+                new_city = search_list[0]
             return_response_json = requests.get(
                 WEATHER_SERVICE.format(
                     BASE_URL=BASE_URL, city_name=new_city, API_KEY=API_KEY
@@ -88,12 +98,12 @@ def parse_api_response(first_response_json, compare, city) -> api_response:
             city = new_city
     else:
         return_response_json = first_response_json
-    return api_response(json=return_response_json, city=city)
+    return ApiResponse(json=return_response_json, city=city)
 
 
 def handling_multi_fuzzy_search_result(new_city_list: list[str], test: bool) -> str:
     """Ask user to choose which city they meant from the fuzzy search"""
-    new_city_list.append("[red]None of the above[/]")
+    new_city_list.append(NONE_OPTION)
     for index, city in enumerate(new_city_list, start=1):
         console.print(f"{index}. {city}")
     while True:

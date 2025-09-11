@@ -16,7 +16,7 @@ from .output import (
     print_compared_weather,
     print_weather_descriptions,
 )
-from .weather_api import call_api, call_forecast_api
+from .weather_api import NONE_OPTION, call_api, call_forecast_api, parse_api_response
 
 app = typer.Typer()
 
@@ -29,8 +29,10 @@ def check_weather(
     ),
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
-    response = call_api(city)
-    if response.json is None or response.city == "[red]None of the above[/]":
+    response = parse_api_response(
+        first_response_json=call_api(city), compare=False, city=city
+    )
+    if response.json is None or response.city == NONE_OPTION:
         raise typer.Abort()
     print_weather_descriptions(response.json, response.city, unit)
     console.print()
@@ -50,8 +52,10 @@ def check_comparison(
 ):
     """Compare city's temperature and weather forecast against another city"""
     console.print()
-    response = call_api(first_city, compare=True)
-    if response.city == "[red]None of the above[/]":
+    response = parse_api_response(
+        first_response_json=call_api(first_city), compare=True, city=first_city
+    )
+    if response.city == NONE_OPTION:
         raise typer.Abort()
     if response.json is None:
         console.print("[bold red]The first city name is invalid.[/]")
@@ -59,8 +63,10 @@ def check_comparison(
     first_city_name = response.city.title().strip()
     first_city_info = get_weather_descriptions(response.json)
 
-    second_response = call_api(second_city, compare=True)
-    if second_response.city == "[red]None of the above[/]":
+    second_response = parse_api_response(
+        first_response_json=call_api(second_city), compare=True, city=second_city
+    )
+    if second_response.city == NONE_OPTION:
         raise typer.Abort()
     if second_response.json is None:
         console.print("[bold red]The second city name is invalid.[/]")
