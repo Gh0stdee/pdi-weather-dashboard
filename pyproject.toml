@@ -5,18 +5,22 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
-    "pytest>=8.4.1",
-    "pytest-mock>=3.15.0",
     "python-decouple>=3.8",
     "requests>=2.32.4",
     "requests-cache>=1.2.1",
     "rich>=14.1.0",
     "typer>=0.16.0",
-    "types-requests>=2.32.4.20250809",
 ]
 
 [dependency-groups]
 dev = [
     "mypy>=1.17.1",
     "ty>=0.0.1a16",
+    "pytest>=8.4.1",
+    "pytest-mock>=3.15.0",
+    "types-requests>=2.32.4.20250809",
 ]
+
+[tool.mypy]
+strict = false
+ignore_missing_imports = true

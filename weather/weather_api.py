@@ -3,7 +3,7 @@ from typing import NamedTuple
 
 import requests
 import requests_cache
-from decouple import config  # type: ignore
+from decouple import config
 from typer import Abort
 
 from .mappings import fuzzy_search
