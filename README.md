@@ -11,30 +11,36 @@ Fuzzy search is supported for misspelled city name
 
 ## Usage
 
-### Current Weather
+### Interactive Mode
 
-#### Prints the weather information of a city
+```uv run main.py```
 
-```uv run main.py check-weather "city_name" --unit=c/f```
+### CLI
 
-> (Options: `c`->Celsius[Default], `f`->Fahrenheit)
+#### Current Weather
 
----
+##### Prints the weather information of a city
 
-### Five Day Weather Forecast
-
-#### Prints a five day weather forecast report of a city
-
-```uv run main.py check-forecast "city_name" --unit=c/f```
+```uv run ty-main.py check-weather "city_name" --unit=c/f```
 
 > (Options: `c`->Celsius[Default], `f`->Fahrenheit)
 
 ---
 
-### Compare Different Cities' Weathers
+#### Five Day Weather Forecast
 
-#### Print the difference in weather between two cities
+##### Prints a five day weather forecast report of a city
 
-```uv run main.py check-comparison "first_city_name" "second_city_name"--unit=c/f --feature=a/w/t```
+```uv run ty-main.py check-forecast "city_name" --unit=c/f```
+
+> (Options: `c`->Celsius[Default], `f`->Fahrenheit)
+
+---
+
+#### Compare Different Cities' Weathers
+
+##### Print the difference in weather between two cities
+
+```uv run ty-main.py check-comparison "first_city_name" "second_city_name"--unit=c/f --feature=a/w/t```
 
 > (Options: `c`->Celsius[Default], `f`->Fahrenheit; `a`->all[default], `w`->weather, `t`->temperature)

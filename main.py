@@ -42,7 +42,7 @@ FUNCTIONS = [
     "Weather Details [bold blue](d)[/]",
     "Weather Forecast [bold blue](f)[/]",
     "Weather Comparison [bold blue](c)[/]",
-    "Check Another City [bold red](q)[/]",
+    "QUIT [bold red](q)[/]",
 ]
 
 INVALID_INPUT = "[bold red]Invalid Input! Please insert again![/]"
