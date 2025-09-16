@@ -33,7 +33,7 @@ def test_get_wind_direction_invalid_angles(arg, expected):
 
 
 def test_fuzzy_search_no_matching_result():
-    assert fuzzy_search("!") is None
+    assert fuzzy_search("!") == []
 
 
 def test_get_five_days_for_forecast(current_day):

@@ -2,7 +2,7 @@ import typer
 
 from .mappings import (
     WEATHERS,
-    Comparison_Feature,
+    ComparisonFeature,
     UnitType,
     from_celsius_convert_to_fahrenheit,
     from_kelvin_convert_to_celsius,
@@ -46,8 +46,8 @@ def check_comparison(
     unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
-    feature: Comparison_Feature = typer.Option(
-        Comparison_Feature.ALL, help="Temperature or Weather of the cities"
+    feature: ComparisonFeature = typer.Option(
+        ComparisonFeature.ALL, help="Temperature or Weather of the cities"
     ),
 ):
     """Compare city's temperature and weather forecast against another city"""
@@ -74,15 +74,15 @@ def check_comparison(
     second_city_name = second_response.city.title().strip()
     second_city_info = get_weather_descriptions(second_response.json)
 
-    if feature == Comparison_Feature.WEATHER:
+    if feature == ComparisonFeature.WEATHER:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
-    elif feature == Comparison_Feature.TEMPERATURE:
+    elif feature == ComparisonFeature.TEMPERATURE:
         print_compared_temperature(
             first_city_name, first_city_info, second_city_name, second_city_info, unit
         )
-    elif feature == Comparison_Feature.ALL:
+    elif feature == ComparisonFeature.ALL:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
@@ -120,7 +120,7 @@ def check_forecast(
         average_temperature = from_kelvin_convert_to_celsius(
             sum(forecast_day.temperatures) / forecast_day.entry_numbers
         )
-        if unit == UnitType.FAHRENHEIT:
+        if unit == UnitType.FAHRENHEIT_CHAR:
             unit_symbol = "°F"
             average_temperature = from_celsius_convert_to_fahrenheit(
                 average_temperature

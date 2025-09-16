@@ -2,7 +2,6 @@ from enum import StrEnum
 from typing import NamedTuple
 
 import requests
-import requests_cache
 from decouple import config  # type: ignore
 from typer import Abort
 
@@ -16,9 +15,6 @@ API_KEY = config("API_KEY")
 NONE_OPTION = "[red]None of the above[/]"
 # TODO: see if we can break out rich which is related to formattting, not data
 
-ONE_DAY = 86400
-requests_cache.install_cache("cache.db", backend="sqlite", expire_after=ONE_DAY)
-
 
 class Connection_Error(StrEnum):
     BAD_REQUEST = "400"
@@ -30,7 +26,7 @@ class ApiResponse(NamedTuple):
     city: str
 
 
-def call_api(city: str) -> dict:
+def call_api(city: str, typer: bool = True) -> dict:
     """Tries to call the API and return response in json format"""
     try:
         first_response_json = requests.get(
@@ -38,18 +34,21 @@ def call_api(city: str) -> dict:
         ).json()
     except requests.ConnectTimeout:
         console.print("[bold red]Unable to connect. Please try again later.[/]")
-        raise Abort()
+        if typer:
+            raise Abort()
     return first_response_json
 
 
-def call_forecast_api(city: str) -> ApiResponse:
+def call_forecast_api(city: str, typer: bool = True) -> ApiResponse | None:
     """Tries to call the Forecast API and return the received response"""
     response = parse_api_response(
-        first_response_json=call_api(city), compare=False, city=city
+        first_response_json=call_api(city, typer), compare=False, city=city
     )  # Call normal API to get latitude and longitude
     if response.json is None or response.city == NONE_OPTION:
-        raise Abort()
-
+        if typer:
+            raise Abort()
+        else:
+            return None
     """
     Response's info have been verified above, no need to parse again
     Return the ApiResponse directly after calling forecast API
@@ -132,4 +131,5 @@ def handling_multi_fuzzy_search_result(new_city_list: list[str], test: bool) -> 
             else:
                 continue
         break
+    console.print()
     return new_city
