@@ -32,22 +32,6 @@ uv sync
 
 <img width="560" height="720" alt="image" src="https://github.com/user-attachments/assets/e06ebaac-6738-4785-b84a-b6eb91e98ede" />
 
-
-```
-$ git clone git@github.com:Gh0stdee/pdi-weather-dashboard.git
-$ cd pdi-weather-dashboard
-$ uv sync --all-extras
-# set api key
-$ cp .env-template .env
-# run the app
-$ uv run main.py --help
-# run the tests
-$ uv run pytest
-# check type hints
-$ uv run ty check .
-$ uv run mypy .
-```
-
 ## Usage
 
 ### Interactive Mode Example:
