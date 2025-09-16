@@ -53,10 +53,11 @@ SPECIFIC_WIND_DIRECTIONS = {
 
 class UnitType(StrEnum):
     CELSIUS = "c"
-    FAHRENHEIT = "f"
+    FAHRENHEIT_CHAR = "f"
+    FAHRENHEIT_INDEX = "2"
 
 
-class Comparison_Feature(StrEnum):
+class ComparisonFeature(StrEnum):
     ALL = "a"
     WEATHER = "w"
     TEMPERATURE = "t"
@@ -116,7 +117,7 @@ def get_all_cities() -> list[str]:
     return city_list
 
 
-def fuzzy_search(city: str) -> list[str] | None:
+def fuzzy_search(city: str) -> list[str]:
     """Return a list of city names that is close to search input"""
     return get_close_matches(city, get_all_cities())
 

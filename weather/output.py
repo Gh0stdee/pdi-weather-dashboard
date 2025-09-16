@@ -67,7 +67,7 @@ def print_compared_temperature(
     first_city_temp = first_city_info["temperature_celsius"]
     second_city_temp = second_city_info["temperature_celsius"]
     difference = first_city_temp - second_city_temp
-    if unit == UnitType.FAHRENHEIT:
+    if unit == UnitType.FAHRENHEIT_CHAR:
         difference *= 9 / 5
         unit_symbol = "°F"
         first_city_temp = from_celsius_convert_to_fahrenheit(first_city_temp)
