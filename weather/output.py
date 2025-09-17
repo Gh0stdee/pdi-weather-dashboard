@@ -11,7 +11,9 @@ from .mappings import (
 console = Console()
 
 
-def print_weather_descriptions(response, city_name: str, unit_preference: str) -> None:
+def print_weather_descriptions(
+    response: dict, city_name: str, unit_preference: str
+) -> None:
     """Printing weather descriptions(weather, temperature and humidity)"""
     weather_descriptions = get_weather_descriptions(response)
     console.print()
@@ -65,7 +67,7 @@ def print_compared_temperature(
     first_city_temp = first_city_info["temperature_celsius"]
     second_city_temp = second_city_info["temperature_celsius"]
     difference = first_city_temp - second_city_temp
-    if unit == UnitType.FAHRENHEIT:
+    if unit == UnitType.FAHRENHEIT_CHAR:
         difference *= 9 / 5
         unit_symbol = "°F"
         first_city_temp = from_celsius_convert_to_fahrenheit(first_city_temp)

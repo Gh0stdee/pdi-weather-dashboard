@@ -53,16 +53,17 @@ SPECIFIC_WIND_DIRECTIONS = {
 
 class UnitType(StrEnum):
     CELSIUS = "c"
-    FAHRENHEIT = "f"
+    FAHRENHEIT_CHAR = "f"
+    FAHRENHEIT_INDEX = "2"
 
 
-class Comparison_Feature(StrEnum):
+class ComparisonFeature(StrEnum):
     ALL = "a"
     WEATHER = "w"
     TEMPERATURE = "t"
 
 
-class forecast_day:
+class ForecastDays:
     def __init__(self):
         self.temperatures = []
         self.forecast_weather_counter = Counter()
@@ -118,46 +119,23 @@ def get_all_cities() -> list[str]:
 
 def fuzzy_search(city: str) -> list[str]:
     """Return a list of city names that is close to search input"""
-    new_search = get_close_matches(city, get_all_cities())
-    if len(new_search) < 1:
-        return None
-    else:
-        return new_search
+    return get_close_matches(city, get_all_cities())
 
 
-def get_five_days_for_forecast():
+def get_five_days_for_forecast() -> list[str]:
     five_days_list = []
     for i in range(0, FIVE_DAYS):
         five_days_list.append(str(CURRENT_DAY + timedelta(days=i))[:DATE_INDEX])
     return five_days_list
 
 
-def parse_forecast_response(forecast_response, five_days_list) -> list[forecast_day]:
+def parse_forecast_response(forecast_response, five_days_list) -> list[ForecastDays]:
     """Separate the response into five days"""
-    first_day = forecast_day()
-    second_day = forecast_day()
-    third_day = forecast_day()
-    fourth_day = forecast_day()
-    fifth_day = forecast_day()
+    days = [ForecastDays() for _ in range(FIVE_DAYS)]
     for forecast_info in forecast_response["list"]:
-        if forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[0]:
-            first_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[1]:
-            second_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[2]:
-            third_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[3]:
-            fourth_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-        elif forecast_info["dt_txt"][:DATE_INDEX] == five_days_list[4]:
-            fifth_day.update_forecast_info(
-                [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
-            )
-    return [first_day, second_day, third_day, fourth_day, fifth_day]
+        for i, day in enumerate(five_days_list):
+            if forecast_info["dt_txt"][:DATE_INDEX] == day:
+                days[i].update_forecast_info(
+                    [forecast_info["weather"][0]["main"]], forecast_info["main"]["temp"]
+                )
+    return days

@@ -2,7 +2,7 @@ import typer
 
 from .mappings import (
     WEATHERS,
-    Comparison_Feature,
+    ComparisonFeature,
     UnitType,
     from_celsius_convert_to_fahrenheit,
     from_kelvin_convert_to_celsius,
@@ -16,7 +16,7 @@ from .output import (
     print_compared_weather,
     print_weather_descriptions,
 )
-from .weather_api import API_Response, call_api, call_forecast_api
+from .weather_api import NONE_OPTION, call_api, call_forecast_api, parse_api_response
 
 app = typer.Typer()
 
@@ -29,13 +29,12 @@ def check_weather(
     ),
 ) -> None:
     """Get weather, temperature, humdity, wind speed of the city"""
-    response = call_api(city)
-    if response[API_Response.JSON] is None:
-        raise typer.Abort()
-
-    print_weather_descriptions(
-        response[API_Response.JSON], response[API_Response.CITY], unit
+    response = parse_api_response(
+        first_response_json=call_api(city), compare=False, city=city
     )
+    if response.json is None or response.city == NONE_OPTION:
+        raise typer.Abort()
+    print_weather_descriptions(response.json, response.city, unit)
     console.print()
     console.rule()
 
@@ -47,35 +46,43 @@ def check_comparison(
     unit: UnitType = typer.Option(
         UnitType.CELSIUS, help="Unit preference in degree Celsius/Fahrenheit"
     ),
-    feature: Comparison_Feature = typer.Option(
-        Comparison_Feature.ALL, help="Temperature or Weather of the cities"
+    feature: ComparisonFeature = typer.Option(
+        ComparisonFeature.ALL, help="Temperature or Weather of the cities"
     ),
 ):
     """Compare city's temperature and weather forecast against another city"""
     console.print()
-    response = call_api(first_city, compare=True)
-    if response[API_Response.JSON] is None:
+    response = parse_api_response(
+        first_response_json=call_api(first_city), compare=True, city=first_city
+    )
+    if response.city == NONE_OPTION:
+        raise typer.Abort()
+    if response.json is None:
         console.print("[bold red]The first city name is invalid.[/]")
         raise typer.Abort()
-    first_city_name = response[API_Response.CITY].title().strip()
-    first_city_info = get_weather_descriptions(response[API_Response.JSON])
+    first_city_name = response.city.title().strip()
+    first_city_info = get_weather_descriptions(response.json)
 
-    second_response = call_api(second_city, compare=True)
-    if second_response[API_Response.JSON] is None:
+    second_response = parse_api_response(
+        first_response_json=call_api(second_city), compare=True, city=second_city
+    )
+    if second_response.city == NONE_OPTION:
+        raise typer.Abort()
+    if second_response.json is None:
         console.print("[bold red]The second city name is invalid.[/]")
         raise typer.Abort()
-    second_city_name = second_response[API_Response.CITY].title().strip()
-    second_city_info = get_weather_descriptions(second_response[API_Response.JSON])
+    second_city_name = second_response.city.title().strip()
+    second_city_info = get_weather_descriptions(second_response.json)
 
-    if feature == Comparison_Feature.WEATHER:
+    if feature == ComparisonFeature.WEATHER:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
-    elif feature == Comparison_Feature.TEMPERATURE:
+    elif feature == ComparisonFeature.TEMPERATURE:
         print_compared_temperature(
             first_city_name, first_city_info, second_city_name, second_city_info, unit
         )
-    elif feature == Comparison_Feature.ALL:
+    elif feature == ComparisonFeature.ALL:
         print_compared_weather(
             first_city_name, first_city_info, second_city_name, second_city_info
         )
@@ -96,32 +103,24 @@ def check_forecast(
     ),
 ):
     """Get a 5 day temperature and weather forecast of the city"""
-    response = call_api(city)
-    if response[API_Response.JSON] is None:
-        raise typer.Abort()
-
     forecast_response = call_forecast_api(city)
     five_days_list = get_five_days_for_forecast()
-    temperature_and_weather_forecast = parse_forecast_response(
-        forecast_response, five_days_list
-    )
+    forecast_days = parse_forecast_response(forecast_response.json, five_days_list)
     console.print()
-    for day_index, (temperatures_of_the_day, weather_counts_of_the_day) in enumerate(
-        temperature_and_weather_forecast
-    ):
+    for day_index, forecast_day in enumerate(forecast_days):
         console.print(f"[{five_days_list[day_index]}]")
-        if weather_counts_of_the_day.most_common(1)[0] == "Tornado":
+        if forecast_day.forecast_weather_counter.most_common(1)[0] == "Tornado":
             console.print(
                 "[bold red]The city is likely to be hit by a tornado! Please stay safe![/]"
             )
         else:
             console.print(
-                f"The weather on this day is mostly {WEATHERS[weather_counts_of_the_day.most_common(1)[0][0]]}."
+                f"The weather on this day is mostly {WEATHERS[forecast_day.forecast_weather_counter.most_common(1)[0][0]]}."
             )
         average_temperature = from_kelvin_convert_to_celsius(
-            sum(temperatures_of_the_day) / len(temperatures_of_the_day)
+            sum(forecast_day.temperatures) / forecast_day.entry_numbers
         )
-        if unit == UnitType.FAHRENHEIT:
+        if unit == UnitType.FAHRENHEIT_CHAR:
             unit_symbol = "°F"
             average_temperature = from_celsius_convert_to_fahrenheit(
                 average_temperature

@@ -210,3 +210,4 @@ __marimo__/
 .cities.json
 .scrapper.py
 cache.db
+cities2.txt

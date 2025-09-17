@@ -149035,8 +149035,6 @@ Channelview
 Charlotte
 Cherokee County
 Chico
-China
-China Grove
 Cibolo
 Cinco Ranch
 Cisco
@@ -152418,7 +152416,6 @@ Charleston
 Chelsea
 Cherryfield
 Chesterville
-China
 Chisholm
 Cleveland
 Clinton
